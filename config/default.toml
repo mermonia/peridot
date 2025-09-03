@@ -1,0 +1,3 @@
+dotfiles_dir = "default directory"
+default_root = "default root"
+backup_dir = "backup directory"
