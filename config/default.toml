@@ -1,3 +1,5 @@
-dotfiles_dir = "default directory"
-default_root = "default root"
-backup_dir = "backup directory"
+dotfiles_dir = "."
+default_root = "~"
+backup_dir = "~/.peridot/backups"
+
+managed_modules = []

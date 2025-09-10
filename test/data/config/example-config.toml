@@ -1,0 +1,5 @@
+dotfiles_dir = "/home/umbraslay/Projects/peridot/test/data/config"
+default_root = "~"
+backup_dir = "~/.peridot/backups"
+
+managed_modules = ["example-module"]

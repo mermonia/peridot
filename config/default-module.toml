@@ -1,0 +1,32 @@
+# The root to which the module directory structure should be deployed.
+# By default, the root is the user's home directory.
+root = "~"
+
+# Files/Patterns to ignore during deployment.
+ignore = [".dotconfig.toml"]
+
+# Required binaries/commands.
+dependencies = []
+
+# Other modules that should be deployed first.
+module_dependencies = []
+
+
+# Required conditions to start deployment. 
+# Ignored if not set or set to an empty string.
+[conditions]
+os = ""
+hostname = ""
+env_exists = ""
+
+
+# Commands to run during deployment or removal of a module.
+# Ignored if not set or set to an empty string.
+[hooks]
+pre_deploy = ""
+post_deploy = ""
+post_remove = ""
+
+
+# Variables available in this module's template files.
+[variables]
