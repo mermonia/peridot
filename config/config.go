@@ -43,30 +43,30 @@ type Hooks struct {
 
 type PathProvider interface {
 	UserConfigPath() (string, error)
-	ProjectConfigPath() (string, error)
+	UserConfigDir() (string, error)
 	CurrentWorkingDir() (string, error)
 }
 
 type DefaultPathProvider struct{}
 
+func (p DefaultPathProvider) UserConfigDir() (string, error) {
+	dir, err := os.UserConfigDir()
+
+	if err != nil {
+		return "", fmt.Errorf("Could not find user config directory: \n%w", err)
+	}
+
+	return dir, nil
+}
+
 func (p DefaultPathProvider) UserConfigPath() (string, error) {
-	base, err := os.UserConfigDir()
+	base, err := p.UserConfigDir()
+
 	if err != nil {
 		return "", err
 	}
 
 	path := filepath.Join(base, "peridot", "peridot.toml")
-	return path, nil
-}
-
-func (p DefaultPathProvider) ProjectConfigPath() (string, error) {
-	base, err := p.CurrentWorkingDir()
-
-	if err != nil {
-		return "", err
-	}
-
-	path := filepath.Join(base, "peridot.toml")
 	return path, nil
 }
 
@@ -87,30 +87,28 @@ func (l *Loader) Load() (*Config, error) {
 
 	// Try to load embedded config
 	if _, err := toml.Decode(string(defaultConfig), cfg); err != nil {
-		return nil, fmt.Errorf("Failed to decode embedded config: %w", err)
+		return nil, fmt.Errorf("Failed to decode embedded config: \n%w", err)
 	}
 
 	// Try to load user config (e.g. ~/.config/peridot/peridot.toml)
 	if path, err := l.pathProvider.UserConfigPath(); err == nil {
-		if err := decodeToml(path, cfg); err != nil {
-			return nil, fmt.Errorf("Failed to decode user config: %w", err)
-		}
-	}
-
-	// Try to load project specific config (e.g. ./peridot.toml)
-	if path, err := l.pathProvider.ProjectConfigPath(); err == nil {
-		if err := decodeToml(path, cfg); err != nil {
-			return nil, fmt.Errorf("Failed to decode project config: %w", err)
+		if err := decodeToml(path, cfg); err != nil && !isFileNotFoundError(err) {
+			return nil, fmt.Errorf("Failed to decode user config: \n%w", err)
 		}
 	}
 
 	// Validate general project config
 	if err := cfg.Validate(); err != nil {
-		return nil, fmt.Errorf("Invalid configuration: %w", err)
+		return nil, fmt.Errorf("Invalid configuration: \n%w", err)
 	}
 
 	// Load per-module configuration files
 	if err := l.loadModules(cfg); err != nil {
+		return nil, err
+	}
+
+	// Resolve relative paths
+	if err := l.resolveConfigPaths(cfg); err != nil {
 		return nil, err
 	}
 
@@ -123,17 +121,61 @@ func (l *Loader) loadModules(cfg *Config) error {
 
 		mCfg := &ModuleConfig{}
 		if err := decodeToml(modulePath, mCfg); err != nil {
-			return fmt.Errorf("Failed to load module %s: %w", module, err)
+			return fmt.Errorf("Failed to load module %s: \n%w", module, err)
 		}
 
 		if err := mCfg.Validate(); err != nil {
-			return fmt.Errorf("Invalid configuration for module '%s': %w", module, err)
+			return fmt.Errorf("Invalid configuration for module '%s': \n%w", module, err)
 		}
 
 		cfg.Modules = append(cfg.Modules, mCfg)
 	}
 
 	return nil
+}
+
+func (l *Loader) resolveConfigPaths(cfg *Config) error {
+	pathFields := []struct {
+		name  string
+		value *string
+	}{
+		{"dotfiles_dir", &cfg.DotfilesDir},
+		{"default_root", &cfg.DefaultRoot},
+		{"backup_dir", &cfg.BackupDir},
+	}
+
+	base, err := l.pathProvider.UserConfigDir()
+
+	if err != nil {
+		return fmt.Errorf("Could not start resolving config's relative paths: \n%w", err)
+	}
+
+	for _, field := range pathFields {
+		resolved, err := l.resolvePath(*field.value, base)
+
+		if err != nil {
+			return err
+		}
+
+		*field.value = resolved
+	}
+
+	return nil
+}
+
+func (l *Loader) resolvePath(path string, base string) (string, error) {
+	if filepath.IsAbs(path) {
+		return filepath.Clean(path), nil
+	}
+
+	resolved := filepath.Join(base, path)
+	absPath, err := filepath.Abs(resolved)
+
+	if err != nil {
+		return "", fmt.Errorf("Could not resolve relative path: %s, \n%w", path, err)
+	}
+
+	return absPath, nil
 }
 
 func (cfg *Config) Validate() error {
@@ -152,13 +194,13 @@ func (mCfg *ModuleConfig) Validate() error {
 
 func decodeToml(path string, target any) error {
 	if _, err := os.Stat(path); isFileNotFoundError(err) {
-		return fmt.Errorf("Could not find file at: %s", path)
+		return err
 	} else if err != nil {
 		return fmt.Errorf("Could not stat file at: %s", path)
 	}
 
 	if _, err := toml.DecodeFile(path, target); err != nil {
-		return fmt.Errorf("failed to decode file at %s: %w", path, err)
+		return fmt.Errorf("failed to decode file at %s: \n%w", path, err)
 	}
 
 	return nil
