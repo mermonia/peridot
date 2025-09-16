@@ -92,9 +92,14 @@ func (l *Loader) Load() (*Config, error) {
 
 	// Try to load user config (e.g. ~/.config/peridot/peridot.toml)
 	if path, err := l.pathProvider.UserConfigPath(); err == nil {
-		if err := decodeToml(path, cfg); err != nil && !isFileNotFoundError(err) {
+		if err := decodeToml(path, cfg); err != nil && !os.IsNotExist(err) {
 			return nil, fmt.Errorf("Failed to decode user config: \n%w", err)
 		}
+	}
+
+	// Resolve relative paths
+	if err := l.resolveConfigPaths(cfg); err != nil {
+		return nil, err
 	}
 
 	// Validate general project config
@@ -104,11 +109,6 @@ func (l *Loader) Load() (*Config, error) {
 
 	// Load per-module configuration files
 	if err := l.loadModules(cfg); err != nil {
-		return nil, err
-	}
-
-	// Resolve relative paths
-	if err := l.resolveConfigPaths(cfg); err != nil {
 		return nil, err
 	}
 
@@ -135,14 +135,7 @@ func (l *Loader) loadModules(cfg *Config) error {
 }
 
 func (l *Loader) resolveConfigPaths(cfg *Config) error {
-	pathFields := []struct {
-		name  string
-		value *string
-	}{
-		{"dotfiles_dir", &cfg.DotfilesDir},
-		{"default_root", &cfg.DefaultRoot},
-		{"backup_dir", &cfg.BackupDir},
-	}
+	pathFields := cfg.getPathFields()
 
 	base, err := l.pathProvider.UserConfigDir()
 
@@ -182,6 +175,22 @@ func (cfg *Config) Validate() error {
 	if cfg.DotfilesDir == "" {
 		return fmt.Errorf("dotfiles_dir is a required field")
 	}
+
+	pathFields := cfg.getPathFields()
+
+	for _, field := range pathFields {
+		_, err := os.Stat(*field.value)
+
+		// Separating non-existence to optionally handle it later (via dir creation, etc.)
+		if os.IsNotExist(err) {
+			return fmt.Errorf("The config field %s references a non-existing path", field.name)
+		}
+
+		if err != nil {
+			return fmt.Errorf("The config field %s references an invalid path", field.name)
+		}
+	}
+
 	return nil
 }
 
@@ -189,13 +198,59 @@ func (mCfg *ModuleConfig) Validate() error {
 	if mCfg.Root == "" {
 		return fmt.Errorf("root is a required field")
 	}
+
+	pathFields := mCfg.getPathFields()
+
+	for _, field := range pathFields {
+		_, err := os.Stat(*field.value)
+
+		// Separating non-existence to optionally handle it later (via dir creation, etc.)
+		if os.IsNotExist(err) {
+			return fmt.Errorf("The config field %s references a non-existing path", field.name)
+		}
+
+		if err != nil {
+			return fmt.Errorf("The config field %s references an invalid path", field.name)
+		}
+	}
+
 	return nil
 }
 
+func (cfg *Config) getPathFields() []struct {
+	name  string
+	value *string
+} {
+	return []struct {
+		name  string
+		value *string
+	}{
+		{"dotfiles_dir", &cfg.DotfilesDir},
+		{"default_root", &cfg.DefaultRoot},
+		{"backup_dir", &cfg.BackupDir},
+	}
+}
+
+func (mCfg *ModuleConfig) getPathFields() []struct {
+	name  string
+	value *string
+} {
+	return []struct {
+		name  string
+		value *string
+	}{
+		{"root", &mCfg.Root},
+	}
+}
+
 func decodeToml(path string, target any) error {
-	if _, err := os.Stat(path); isFileNotFoundError(err) {
+	_, err := os.Stat(path)
+
+	if os.IsNotExist(err) {
 		return err
-	} else if err != nil {
+	}
+
+	if err != nil {
 		return fmt.Errorf("Could not stat file at: %s", path)
 	}
 
@@ -204,8 +259,4 @@ func decodeToml(path string, target any) error {
 	}
 
 	return nil
-}
-
-func isFileNotFoundError(err error) bool {
-	return os.IsNotExist(err)
 }
