@@ -12,11 +12,13 @@ import (
 var defaultConfig []byte
 
 type Config struct {
-	DotfilesDir    string          `toml:"dotfiles_dir"`
-	BackupDir      string          `toml:"backup_dir"`
-	DefaultRoot    string          `toml:"default_root"`
-	ManagedModules []string        `toml:"managed_modules"`
-	Modules        []*ModuleConfig `toml:"-"`
+	DotfilesDir    string   `toml:"dotfiles_dir"`
+	BackupDir      string   `toml:"backup_dir"`
+	DefaultRoot    string   `toml:"default_root"`
+	ManagedModules []string `toml:"managed_modules"`
+
+	// Modules are loaded based on the managed_modules field
+	Modules map[string]*ModuleConfig `toml:"-"`
 }
 
 type ModuleConfig struct {
@@ -112,6 +114,10 @@ func (l *Loader) Load() (*Config, error) {
 		return nil, err
 	}
 
+	if err := cfg.validateNoCycles(); err != nil {
+		return nil, err
+	}
+
 	return cfg, nil
 }
 
@@ -128,7 +134,7 @@ func (l *Loader) loadModules(cfg *Config) error {
 			return fmt.Errorf("Invalid configuration for module '%s': \n%w", module, err)
 		}
 
-		cfg.Modules = append(cfg.Modules, mCfg)
+		cfg.Modules[module] = mCfg
 	}
 
 	return nil
@@ -187,7 +193,7 @@ func (cfg *Config) Validate() error {
 		}
 
 		if err != nil {
-			return fmt.Errorf("The config field %s references an invalid path", field.name)
+			return fmt.Errorf("The config field %s references an invalid path: \n%w", field.name, err)
 		}
 	}
 
@@ -206,11 +212,11 @@ func (mCfg *ModuleConfig) Validate() error {
 
 		// Separating non-existence to optionally handle it later (via dir creation, etc.)
 		if os.IsNotExist(err) {
-			return fmt.Errorf("The config field %s references a non-existing path", field.name)
+			return fmt.Errorf("The module config field %s references a non-existing path", field.name)
 		}
 
 		if err != nil {
-			return fmt.Errorf("The config field %s references an invalid path", field.name)
+			return fmt.Errorf("The module config field %s references an invalid path: \n%w", field.name, err)
 		}
 	}
 
@@ -241,6 +247,43 @@ func (mCfg *ModuleConfig) getPathFields() []struct {
 	}{
 		{"root", &mCfg.Root},
 	}
+}
+
+func (cfg *Config) validateNoCycles() error {
+	visited := make(map[string]bool)
+	recursionStack := make(map[string]bool)
+
+	modules := cfg.Modules
+	for moduleName, _ := range modules {
+		if !visited[moduleName] {
+			if cfg.hasCycle(moduleName, visited, recursionStack) {
+				return fmt.Errorf("Detected cyclical module dependency regarding the module %s", moduleName)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (cfg *Config) hasCycle(moduleName string, visited, recursionStack map[string]bool) bool {
+	visited[moduleName] = true
+	recursionStack[moduleName] = true
+
+	mCfg := cfg.Modules[moduleName]
+
+	deps := mCfg.ModuleDependencies
+	for _, dep := range deps {
+		if !visited[dep] {
+			if cfg.hasCycle(dep, visited, recursionStack) {
+				return true
+			}
+		} else if recursionStack[dep] {
+			return true
+		}
+	}
+
+	recursionStack[moduleName] = false
+	return false
 }
 
 func decodeToml(path string, target any) error {
