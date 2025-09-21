@@ -46,7 +46,6 @@ type Hooks struct {
 type PathProvider interface {
 	UserConfigPath() (string, error)
 	UserConfigDir() (string, error)
-	CurrentWorkingDir() (string, error)
 }
 
 type DefaultPathProvider struct{}
@@ -72,10 +71,6 @@ func (p DefaultPathProvider) UserConfigPath() (string, error) {
 	return path, nil
 }
 
-func (p DefaultPathProvider) CurrentWorkingDir() (string, error) {
-	return os.Getwd()
-}
-
 type Loader struct {
 	pathProvider PathProvider
 }
@@ -86,6 +81,7 @@ func NewLoader(pathProvider PathProvider) *Loader {
 
 func (l *Loader) Load() (*Config, error) {
 	cfg := &Config{}
+	cfg.Modules = make(map[string]*ModuleConfig)
 
 	// Try to load embedded config
 	if _, err := toml.Decode(string(defaultConfig), cfg); err != nil {
@@ -105,7 +101,7 @@ func (l *Loader) Load() (*Config, error) {
 	}
 
 	// Validate general project config
-	if err := cfg.Validate(); err != nil {
+	if err := cfg.validate(); err != nil {
 		return nil, fmt.Errorf("Invalid configuration: \n%w", err)
 	}
 
@@ -114,7 +110,13 @@ func (l *Loader) Load() (*Config, error) {
 		return nil, err
 	}
 
-	if err := cfg.validateNoCycles(); err != nil {
+	// Validate each module's dependencies existence and management
+	if err := cfg.validateModuleDependencies(); err != nil {
+		return nil, err
+	}
+
+	// Check for circular dependencies in the module configs
+	if err := cfg.checkCircularModuleDependencies(); err != nil {
 		return nil, err
 	}
 
@@ -130,7 +132,7 @@ func (l *Loader) loadModules(cfg *Config) error {
 			return fmt.Errorf("Failed to load module %s: \n%w", module, err)
 		}
 
-		if err := mCfg.Validate(); err != nil {
+		if err := mCfg.validate(); err != nil {
 			return fmt.Errorf("Invalid configuration for module '%s': \n%w", module, err)
 		}
 
@@ -177,7 +179,7 @@ func (l *Loader) resolvePath(path string, base string) (string, error) {
 	return absPath, nil
 }
 
-func (cfg *Config) Validate() error {
+func (cfg *Config) validate() error {
 	if cfg.DotfilesDir == "" {
 		return fmt.Errorf("dotfiles_dir is a required field")
 	}
@@ -200,7 +202,7 @@ func (cfg *Config) Validate() error {
 	return nil
 }
 
-func (mCfg *ModuleConfig) Validate() error {
+func (mCfg *ModuleConfig) validate() error {
 	if mCfg.Root == "" {
 		return fmt.Errorf("root is a required field")
 	}
@@ -249,16 +251,35 @@ func (mCfg *ModuleConfig) getPathFields() []struct {
 	}
 }
 
-func (cfg *Config) validateNoCycles() error {
+func (cfg *Config) validateModuleDependencies() error {
+	managedSet := make(map[string]bool)
+
+	for _, module := range cfg.ManagedModules {
+		managedSet[module] = true
+	}
+
+	for moduleName, mCfg := range cfg.Modules {
+		for _, dep := range mCfg.ModuleDependencies {
+			if !managedSet[dep] {
+				return fmt.Errorf(
+					"The dependency '%s' from the module '%s' is not managed by peridot or does not exist",
+					dep,
+					moduleName)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (cfg *Config) checkCircularModuleDependencies() error {
 	visited := make(map[string]bool)
 	recursionStack := make(map[string]bool)
 
 	modules := cfg.Modules
-	for moduleName, _ := range modules {
-		if !visited[moduleName] {
-			if cfg.hasCycle(moduleName, visited, recursionStack) {
-				return fmt.Errorf("Detected cyclical module dependency regarding the module %s", moduleName)
-			}
+	for moduleName := range modules {
+		if !visited[moduleName] && cfg.hasCycle(moduleName, visited, recursionStack) {
+			return fmt.Errorf("Detected cyclical module dependency regarding the module %s", moduleName)
 		}
 	}
 
