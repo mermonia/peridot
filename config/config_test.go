@@ -3,24 +3,31 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
-type MockPathProvider struct {
+type fieldToValidate struct {
+	name   string
+	value  any
+	target any
+}
+
+type mockPathProvider struct {
 	userConfigDir string
 }
 
-func NewMockPathProvider(userConfigDir string) *MockPathProvider {
-	return &MockPathProvider{
+func newMockPathProvider(userConfigDir string) *mockPathProvider {
+	return &mockPathProvider{
 		userConfigDir: userConfigDir,
 	}
 }
 
-func (p MockPathProvider) UserConfigDir() (string, error) {
+func (p mockPathProvider) UserConfigDir() (string, error) {
 	return p.userConfigDir, nil
 }
 
-func (p MockPathProvider) UserConfigPath() (string, error) {
+func (p mockPathProvider) UserConfigPath() (string, error) {
 	base, err := p.UserConfigDir()
 
 	if err != nil {
@@ -30,12 +37,13 @@ func (p MockPathProvider) UserConfigPath() (string, error) {
 	return filepath.Join(base, "peridot.toml"), nil
 }
 
-func setupTestingEnvironment(t *testing.T) (*MockPathProvider, string) {
+func setupTestingEnvironment(t *testing.T) (*mockPathProvider, string) {
+	t.Helper()
 	tempDir := t.TempDir()
 
 	directories := map[string]string{
 		"dotfiles_dir": "dotfiles",
-		"backup_dir":   "backup",
+		"backup_dir":   "backups",
 		"root":         "root",
 		"user_cfg_dir": "user_cfg_dir",
 	}
@@ -63,7 +71,7 @@ func setupTestingEnvironment(t *testing.T) (*MockPathProvider, string) {
 
 	}
 
-	pathProvider := NewMockPathProvider(filepath.Join(tempDir, directories["user_cfg_dir"]))
+	pathProvider := newMockPathProvider(filepath.Join(tempDir, directories["user_cfg_dir"]))
 
 	return pathProvider, tempDir
 }
@@ -74,7 +82,7 @@ func TestLoad_normalConfig(t *testing.T) {
 	cfg_file := `
 	dotfiles_dir = "` + filepath.Join(tempDir, "dotfiles") + `"
 	default_root = "` + filepath.Join(tempDir, "root") + `"
-	backup_dir = "` + filepath.Join(tempDir, "backup") + `"
+	backup_dir = "` + filepath.Join(tempDir, "backups") + `"
 	managed_modules = ["nvim", "hyprland"]
 	`
 
@@ -139,9 +147,153 @@ func TestLoad_normalConfig(t *testing.T) {
 	}
 
 	loader := NewLoader(pathProvider)
-	_, err = loader.Load()
+	cfg, err := loader.Load()
 
 	if err != nil {
 		t.Fatalf("Failed to load the config: %s", err)
+	}
+
+	validateConfigFields(t, cfg, tempDir)
+	validateModuleConfigFields(t, cfg, tempDir)
+}
+
+func validateConfigFields(t *testing.T, cfg *Config, tempDir string) {
+	t.Helper()
+	configTestTable := []fieldToValidate{
+		{
+			name:   "dotfiles_dir",
+			value:  cfg.DotfilesDir,
+			target: filepath.Join(tempDir, "dotfiles"),
+		},
+		{
+			name:   "backup_dir",
+			value:  cfg.BackupDir,
+			target: filepath.Join(tempDir, "backups"),
+		},
+		{
+			name:   "root",
+			value:  cfg.DefaultRoot,
+			target: filepath.Join(tempDir, "root"),
+		},
+		{
+			name:   "number of modules",
+			value:  len(cfg.Modules),
+			target: 2,
+		},
+		{
+			name:   "nvim module existence",
+			value:  cfg.Modules["nvim"] != nil,
+			target: true,
+		},
+		{
+			name:   "hyprland module existence",
+			value:  cfg.Modules["hyprland"] != nil,
+			target: true,
+		},
+	}
+
+	for _, field := range configTestTable {
+		validateField(field, t)
+	}
+}
+
+func validateModuleConfigFields(t *testing.T, cfg *Config, tempDir string) {
+	nvimMcfg := cfg.Modules["nvim"]
+	nvimConfigTestTable := []fieldToValidate{
+		{
+			name:   "nvim root",
+			value:  nvimMcfg.Root,
+			target: filepath.Join(tempDir, "root"),
+		},
+		{
+			name:   "nvim ignore",
+			value:  nvimMcfg.Ignore,
+			target: []string{".ignore"},
+		},
+		{
+			name:   "nvim dependencies",
+			value:  nvimMcfg.Dependencies,
+			target: []string{"bash", "lua"},
+		},
+		{
+			name:   "nvim module dependencies",
+			value:  nvimMcfg.ModuleDependencies,
+			target: []string{"hyprland"},
+		},
+		{
+			name:  "nvim conditions",
+			value: nvimMcfg.Conditions,
+			target: Conditions{
+				OperatingSystem: "Linux",
+				Hostname:        "",
+				EnvRequired:     "",
+			},
+		},
+		{
+			name:  "nvim hooks",
+			value: nvimMcfg.Hooks,
+			target: Hooks{
+				PreDeploy:  "echo 'About to deploy nvim!'",
+				PostDeploy: "nvim",
+				PostRemove: "echo 'Just removed nvim'",
+			},
+		},
+	}
+
+	for _, field := range nvimConfigTestTable {
+		validateField(field, t)
+	}
+
+	hyprlandMcfg := cfg.Modules["hyprland"]
+	hyprlandConfigTestTable := []fieldToValidate{
+		{
+			name:   "hyprland root",
+			value:  hyprlandMcfg.Root,
+			target: filepath.Join(tempDir, "root"),
+		},
+		{
+			name:   "hyprland ignore",
+			value:  hyprlandMcfg.Ignore,
+			target: []string{".ignore"},
+		},
+		{
+			name:   "hyprland dependencies",
+			value:  hyprlandMcfg.Dependencies,
+			target: []string{},
+		},
+		{
+			name:   "hyprland module dependencies",
+			value:  hyprlandMcfg.ModuleDependencies,
+			target: []string{},
+		},
+		{
+			name:  "hyprland conditions",
+			value: hyprlandMcfg.Conditions,
+			target: Conditions{
+				OperatingSystem: "Linux",
+				Hostname:        "",
+				EnvRequired:     "",
+			},
+		},
+		{
+			name:  "hyprland hooks",
+			value: hyprlandMcfg.Hooks,
+			target: Hooks{
+				PreDeploy:  "echo 'About to deploy hyprland!'",
+				PostDeploy: "",
+				PostRemove: "echo 'Just removed hyprland'",
+			},
+		},
+	}
+
+	for _, field := range hyprlandConfigTestTable {
+		validateField(field, t)
+	}
+}
+
+func validateField(f fieldToValidate, t *testing.T) {
+	t.Helper()
+	if !reflect.DeepEqual(f.value, f.target) {
+		t.Errorf("The field %q should be \"%v\", got \"%v\" instead.", f.name, f.target, f.value)
 	}
 }
