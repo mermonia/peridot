@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -296,4 +297,49 @@ func validateField(f fieldToValidate, t *testing.T) {
 	if !reflect.DeepEqual(f.value, f.target) {
 		t.Errorf("The field %q should be \"%v\", got \"%v\" instead.", f.name, f.target, f.value)
 	}
+}
+
+func TestDefaultPathProvider(t *testing.T) {
+	pathProvider := DefaultPathProvider{}
+
+	t.Run("UserConfigDir returns valid directory", func(t *testing.T) {
+		dir, err := pathProvider.UserConfigDir()
+
+		if err != nil {
+			t.Errorf("UserConfigDir should not return an error")
+		}
+
+		if dir == "" {
+			t.Errorf("UserConfigDir should not return an empty string")
+		}
+
+		if !filepath.IsAbs(dir) {
+			t.Errorf("UserConfigDir should return an absolute path")
+		}
+
+		if _, err := os.Stat(dir); err != nil {
+			t.Errorf("UserConfigDir returned a path that fails to stat")
+		}
+	})
+
+	t.Run("UserConfigPath returns a valid path", func(t *testing.T) {
+		path, err := pathProvider.UserConfigPath()
+
+		if err != nil {
+			t.Errorf("UserConfigPath should not return an error")
+		}
+
+		if path == "" {
+			t.Errorf("UserConfigPath should not return an empty string")
+		}
+
+		if !filepath.IsAbs(path) {
+			t.Errorf("UserConfigPath should return an absolute path")
+		}
+
+		requiredSuffix := filepath.Join("peridot", "peridot.toml")
+		if !strings.HasSuffix(path, requiredSuffix) {
+			t.Errorf("UserConfigPath should return a path ending in: %s", requiredSuffix)
+		}
+	})
 }
