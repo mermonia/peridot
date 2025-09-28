@@ -1,10 +1,10 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/mermonia/peridot/config"
+	"github.com/mermonia/peridot/internal/logger"
 )
 
 func ExecuteInit() error {
@@ -17,7 +17,6 @@ func ExecuteInit() error {
 
 	createMissingDirs(cfg)
 
-	fmt.Println("Executed init!")
 	return nil
 }
 
@@ -26,7 +25,7 @@ func createMissingDirs(cfg *config.Config) error {
 
 	for _, dir := range possibleDirs {
 		if _, err := os.Stat(*dir.Value); os.IsNotExist(err) {
-			fmt.Printf("Will create %s: %s\n", dir.Name, *dir.Value)
+			logger.Info("About to create dir", "dir", *dir.Value)
 		} else if err != nil {
 			return err
 		}

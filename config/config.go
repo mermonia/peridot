@@ -3,10 +3,12 @@ package config
 import (
 	_ "embed"
 	"fmt"
-	"github.com/BurntSushi/toml"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/BurntSushi/toml"
+	"github.com/mermonia/peridot/internal/logger"
 )
 
 //go:embed default.toml
@@ -81,6 +83,8 @@ func NewLoader(pathProvider PathProvider) *Loader {
 }
 
 func (l *Loader) Load() (*Config, error) {
+	logger.Info("Starting configuration loading...")
+
 	cfg := &Config{}
 	cfg.Modules = make(map[string]*ModuleConfig)
 
@@ -91,8 +95,12 @@ func (l *Loader) Load() (*Config, error) {
 
 	// Try to load user config (e.g. ~/.config/peridot/peridot.toml)
 	if path, err := l.pathProvider.UserConfigPath(); err == nil {
-		if err := decodeToml(path, cfg); err != nil && !os.IsNotExist(err) {
-			return nil, fmt.Errorf("Failed to decode user config: \n%w", err)
+		err := decodeToml(path, cfg)
+
+		if os.IsNotExist(err) {
+			logger.Warn("Could not find user configuration for peridot")
+		} else if err != nil {
+			logger.Warn("The user configuration for peridot has an invalid format, skipping...")
 		}
 	}
 
@@ -111,7 +119,7 @@ func (l *Loader) Load() (*Config, error) {
 		return nil, err
 	}
 
-	// Validate each module's dependencies existence and management
+	// Validate each module's module dependencies existence and management
 	if err := cfg.validateModuleDependencies(); err != nil {
 		return nil, err
 	}
@@ -130,7 +138,7 @@ func (l *Loader) loadModules(cfg *Config) error {
 
 		mCfg := &ModuleConfig{}
 		if err := decodeToml(modulePath, mCfg); err != nil {
-			return fmt.Errorf("Failed to load module %s: \n%w", module, err)
+			return fmt.Errorf("Failed to decode module config %s: \n%w", module, err)
 		}
 
 		if err := mCfg.validate(); err != nil {
@@ -192,10 +200,44 @@ func (l *Loader) resolvePath(path string, base string) (string, error) {
 }
 
 func (cfg *Config) validate() error {
+	if err := cfg.validateRequiredFields(); err != nil {
+		return err
+	}
+
+	if err := cfg.validatePaths(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (mCfg *ModuleConfig) validate() error {
+	if err := mCfg.validateRequiredFields(); err != nil {
+		return err
+	}
+
+	if err := mCfg.validatePaths(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (cfg *Config) validateRequiredFields() error {
 	if cfg.DotfilesDir == "" {
 		return fmt.Errorf("dotfiles_dir is a required field")
 	}
+	return nil
+}
 
+func (mCfg *ModuleConfig) validateRequiredFields() error {
+	if mCfg.Root == "" {
+		return fmt.Errorf("root is a required field")
+	}
+	return nil
+}
+
+func (cfg *Config) validatePaths() error {
 	pathFields := cfg.GetPathFields()
 
 	for _, field := range pathFields {
@@ -204,6 +246,10 @@ func (cfg *Config) validate() error {
 		// Separating non-existence to optionally handle it later (via dir creation, etc.)
 		if os.IsNotExist(err) {
 			// return fmt.Errorf("The config field %s references a non-existing path", field.Name)
+			logger.Warn("The config field references a non-existing path",
+				"field", field.Name,
+				"path", *field.Value)
+
 			return nil
 		}
 
@@ -215,11 +261,7 @@ func (cfg *Config) validate() error {
 	return nil
 }
 
-func (mCfg *ModuleConfig) validate() error {
-	if mCfg.Root == "" {
-		return fmt.Errorf("root is a required field")
-	}
-
+func (mCfg *ModuleConfig) validatePaths() error {
 	pathFields := mCfg.GetPathFields()
 
 	for _, field := range pathFields {
@@ -328,11 +370,11 @@ func decodeToml(path string, target any) error {
 	}
 
 	if err != nil {
-		return fmt.Errorf("Could not stat file at: %s", path)
+		return fmt.Errorf("Could not stat file at %s: \n%w", path, err)
 	}
 
 	if _, err := toml.DecodeFile(path, target); err != nil {
-		return fmt.Errorf("failed to decode file at %s: \n%w", path, err)
+		return fmt.Errorf("Failed to decode file at %s: \n%w", path, err)
 	}
 
 	return nil
