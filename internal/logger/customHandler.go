@@ -81,7 +81,10 @@ func (h *CustomHandler) Handle(ctx context.Context, r slog.Record) error {
 	}
 
 	// All attributes and groups go inside brackets []
-	buf = fmt.Append(buf, "[ ")
+	hasAttributes := (r.NumAttrs() + len(goas)) > 0
+	if hasAttributes {
+		buf = fmt.Append(buf, "[ ")
+	}
 
 	for _, goa := range goas {
 		if goa.group != "" {
@@ -105,7 +108,11 @@ func (h *CustomHandler) Handle(ctx context.Context, r slog.Record) error {
 		}
 	}
 
-	buf = fmt.Appendf(buf, "]\n")
+	if hasAttributes {
+		buf = fmt.Append(buf, "]")
+	}
+
+	buf = fmt.Append(buf, "\n")
 
 	h.mu.Lock()
 	defer h.mu.Unlock()
