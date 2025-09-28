@@ -6,6 +6,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 //go:embed default.toml
@@ -33,7 +34,7 @@ type ModuleConfig struct {
 
 type Conditions struct {
 	OperatingSystem string `toml:"os"`
-	Hostname        string `toml:"hostname"`
+	Hostname        string `toml:"hos.Name"`
 	EnvRequired     string `toml:"env_exists"`
 }
 
@@ -143,7 +144,7 @@ func (l *Loader) loadModules(cfg *Config) error {
 }
 
 func (l *Loader) resolveConfigPaths(cfg *Config) error {
-	pathFields := cfg.getPathFields()
+	pathFields := cfg.GetPathFields()
 
 	base, err := l.pathProvider.UserConfigDir()
 
@@ -152,19 +153,30 @@ func (l *Loader) resolveConfigPaths(cfg *Config) error {
 	}
 
 	for _, field := range pathFields {
-		resolved, err := l.resolvePath(*field.value, base)
+		resolved, err := l.resolvePath(*field.Value, base)
 
 		if err != nil {
 			return err
 		}
 
-		*field.value = resolved
+		*field.Value = resolved
 	}
 
 	return nil
 }
 
 func (l *Loader) resolvePath(path string, base string) (string, error) {
+	// Resolve leading tildes
+	if s, found := strings.CutPrefix(path, "~"); found {
+		homeDir, err := os.UserHomeDir()
+
+		if err != nil {
+			return "", fmt.Errorf("Failed to find user home dir while resolving a tilde in the path %s: \n%w", path, err)
+		}
+
+		path = filepath.Join(homeDir, s)
+	}
+
 	if filepath.IsAbs(path) {
 		return filepath.Clean(path), nil
 	}
@@ -184,18 +196,19 @@ func (cfg *Config) validate() error {
 		return fmt.Errorf("dotfiles_dir is a required field")
 	}
 
-	pathFields := cfg.getPathFields()
+	pathFields := cfg.GetPathFields()
 
 	for _, field := range pathFields {
-		_, err := os.Stat(*field.value)
+		_, err := os.Stat(*field.Value)
 
 		// Separating non-existence to optionally handle it later (via dir creation, etc.)
 		if os.IsNotExist(err) {
-			return fmt.Errorf("The config field %s references a non-existing path", field.name)
+			// return fmt.Errorf("The config field %s references a non-existing path", field.Name)
+			return nil
 		}
 
 		if err != nil {
-			return fmt.Errorf("The config field %s references an invalid path: \n%w", field.name, err)
+			return fmt.Errorf("The config field %s references an invalid path: \n%w", field.Name, err)
 		}
 	}
 
@@ -207,31 +220,31 @@ func (mCfg *ModuleConfig) validate() error {
 		return fmt.Errorf("root is a required field")
 	}
 
-	pathFields := mCfg.getPathFields()
+	pathFields := mCfg.GetPathFields()
 
 	for _, field := range pathFields {
-		_, err := os.Stat(*field.value)
+		_, err := os.Stat(*field.Value)
 
 		// Separating non-existence to optionally handle it later (via dir creation, etc.)
 		if os.IsNotExist(err) {
-			return fmt.Errorf("The module config field %s references a non-existing path", field.name)
+			return fmt.Errorf("The module config field %s references a non-existing path", field.Name)
 		}
 
 		if err != nil {
-			return fmt.Errorf("The module config field %s references an invalid path: \n%w", field.name, err)
+			return fmt.Errorf("The module config field %s references an invalid path: \n%w", field.Name, err)
 		}
 	}
 
 	return nil
 }
 
-func (cfg *Config) getPathFields() []struct {
-	name  string
-	value *string
+func (cfg *Config) GetPathFields() []struct {
+	Name  string
+	Value *string
 } {
 	return []struct {
-		name  string
-		value *string
+		Name  string
+		Value *string
 	}{
 		{"dotfiles_dir", &cfg.DotfilesDir},
 		{"default_root", &cfg.DefaultRoot},
@@ -239,13 +252,13 @@ func (cfg *Config) getPathFields() []struct {
 	}
 }
 
-func (mCfg *ModuleConfig) getPathFields() []struct {
-	name  string
-	value *string
+func (mCfg *ModuleConfig) GetPathFields() []struct {
+	Name  string
+	Value *string
 } {
 	return []struct {
-		name  string
-		value *string
+		Name  string
+		Value *string
 	}{
 		{"root", &mCfg.Root},
 	}
