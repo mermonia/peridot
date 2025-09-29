@@ -148,7 +148,8 @@ func TestLoad_normalConfig(t *testing.T) {
 	}
 
 	loader := NewLoader(pathProvider)
-	cfg, err := loader.Load()
+	cfg, err := loader.LoadConfig()
+	cfg, err = cfg.LoadModules()
 
 	if err != nil {
 		t.Fatalf("Failed to load the config: %s", err)
