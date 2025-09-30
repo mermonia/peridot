@@ -35,7 +35,7 @@ func (p mockPathProvider) UserConfigPath() (string, error) {
 		return "", err
 	}
 
-	return filepath.Join(base, "peridot.toml"), nil
+	return filepath.Join(base, GeneralConfigFileName), nil
 }
 
 func setupTestingEnvironment(t *testing.T) (*mockPathProvider, string) {
@@ -130,14 +130,14 @@ func TestLoad_normalConfig(t *testing.T) {
 	[variables]
 	`
 
-	err := os.WriteFile(filepath.Join(tempDir, "user_cfg_dir", "peridot.toml"), []byte(cfg_file), 0755)
+	err := os.WriteFile(filepath.Join(tempDir, "user_cfg_dir", GeneralConfigFileName), []byte(cfg_file), 0755)
 
 	if err != nil {
 		t.Fatalf("Could not write the configuration file!")
 	}
 
 	for name, mCfg := range moduleConfig_files {
-		err := os.WriteFile(filepath.Join(tempDir, "dotfiles", name, "module.toml"), []byte(mCfg), 0755)
+		err := os.WriteFile(filepath.Join(tempDir, "dotfiles", name, ModuleConfigFileName), []byte(mCfg), 0755)
 
 		if err != nil {
 			t.Fatalf(`
@@ -149,7 +149,7 @@ func TestLoad_normalConfig(t *testing.T) {
 
 	loader := NewLoader(pathProvider)
 	cfg, err := loader.LoadConfig()
-	cfg, err = cfg.LoadModules()
+	cfg, err = loader.LoadModules(cfg)
 
 	if err != nil {
 		t.Fatalf("Failed to load the config: %s", err)
@@ -338,7 +338,7 @@ func TestDefaultPathProvider(t *testing.T) {
 			t.Errorf("UserConfigPath should return an absolute path")
 		}
 
-		requiredSuffix := filepath.Join("peridot", "peridot.toml")
+		requiredSuffix := filepath.Join("peridot", GeneralConfigFileName)
 		if !strings.HasSuffix(path, requiredSuffix) {
 			t.Errorf("UserConfigPath should return a path ending in: %s", requiredSuffix)
 		}

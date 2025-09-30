@@ -12,7 +12,13 @@ import (
 )
 
 //go:embed default.toml
-var defaultConfig []byte
+var DefaultConfig []byte
+
+//go:embed default-module.toml
+var DefaultModuleConfig []byte
+
+var GeneralConfigFileName string = "peridot.toml"
+var ModuleConfigFileName string = "module.toml"
 
 type Config struct {
 	DotfilesDir    string   `toml:"dotfiles_dir"`
@@ -70,7 +76,7 @@ func (p DefaultPathProvider) UserConfigPath() (string, error) {
 		return "", err
 	}
 
-	path := filepath.Join(base, "peridot", "peridot.toml")
+	path := filepath.Join(base, "peridot", GeneralConfigFileName)
 	return path, nil
 }
 
@@ -89,7 +95,7 @@ func (l *Loader) LoadConfig() (*Config, error) {
 	cfg.Modules = make(map[string]*ModuleConfig)
 
 	// Try to load embedded config
-	if _, err := toml.Decode(string(defaultConfig), cfg); err != nil {
+	if _, err := toml.Decode(string(DefaultConfig), cfg); err != nil {
 		return nil, fmt.Errorf("Failed to decode embedded config: %w", err)
 	}
 
@@ -98,7 +104,7 @@ func (l *Loader) LoadConfig() (*Config, error) {
 		err := decodeToml(path, cfg)
 
 		if os.IsNotExist(err) {
-			logger.Warn("Could not find user configuration for peridot")
+			logger.Warn("Could not find user configuration for peridot", "path", path)
 		} else if err != nil {
 			logger.Warn("The user configuration for peridot has an invalid format, skipping...")
 		}
@@ -118,17 +124,27 @@ func (l *Loader) LoadConfig() (*Config, error) {
 	return cfg, nil
 }
 
-func (cfg *Config) LoadModules() (*Config, error) {
+func (l *Loader) LoadModules(cfg *Config) (*Config, error) {
 	logger.Info("Starting modules configuration loading...")
 	updatedCfg := cfg.DeepCopy()
 
 	// Load per-module configuration files
-	if err := updatedCfg.loadModuleConfigFiles(); err != nil {
+	if err := l.loadModuleConfigFiles(updatedCfg); err != nil {
+		return cfg, err
+	}
+
+	// Resolve relative paths
+	if err := l.resolveModuleConfigPaths(updatedCfg); err != nil {
+		return cfg, err
+	}
+
+	// Validate general modules config
+	if err := updatedCfg.validateModules(); err != nil {
 		return cfg, err
 	}
 
 	// Validate each module's module dependencies existence and management
-	if err := updatedCfg.validateModuleDependencies(); err != nil {
+	if err := updatedCfg.checkModuleDependencies(); err != nil {
 		return cfg, err
 	}
 
@@ -141,22 +157,45 @@ func (cfg *Config) LoadModules() (*Config, error) {
 	return updatedCfg, nil
 }
 
-func (cfg *Config) loadModuleConfigFiles() error {
+func (l *Loader) loadModuleConfigFiles(cfg *Config) error {
 	for _, module := range cfg.ManagedModules {
-		modulePath := filepath.Join(cfg.DotfilesDir, module, "module.toml")
+		modulePath := filepath.Join(cfg.DotfilesDir, module, ModuleConfigFileName)
 
 		mCfg := &ModuleConfig{}
 		if err := decodeToml(modulePath, mCfg); err != nil {
 			return fmt.Errorf("Failed to decode module config %s: %w", module, err)
 		}
 
-		if err := mCfg.validate(); err != nil {
-			return fmt.Errorf("Invalid configuration for module '%s': %w", module, err)
-		}
-
 		cfg.Modules[module] = mCfg
 	}
 
+	return nil
+}
+
+func (cfg *Config) validateModules() error {
+	for moduleName, mCfg := range cfg.Modules {
+		if err := mCfg.validate(); err != nil {
+			return fmt.Errorf("Invalid configuration for module '%s': %w", moduleName, err)
+		}
+	}
+	return nil
+}
+
+func (l *Loader) resolveModuleConfigPaths(cfg *Config) error {
+	for moduleName, mCfg := range cfg.Modules {
+		pathFields := mCfg.GetPathFields()
+		base := filepath.Join(cfg.DotfilesDir, moduleName)
+
+		for _, field := range pathFields {
+			newPath, err := l.resolvePath(*field.Value, base)
+
+			if err != nil {
+				return fmt.Errorf("Could not resolve path fields for module %s: %w", moduleName, err)
+			}
+
+			*field.Value = newPath
+		}
+	}
 	return nil
 }
 
@@ -326,7 +365,7 @@ func (mCfg *ModuleConfig) validatePaths() error {
 
 		// Separating non-existence to optionally handle it later (via dir creation, etc.)
 		if os.IsNotExist(err) {
-			return fmt.Errorf("The module config field %s references a non-existing path", field.Name)
+			return fmt.Errorf("The module config field %s references a non-existing path: %w", field.Name, err)
 		}
 
 		if err != nil {
@@ -363,7 +402,7 @@ func (mCfg *ModuleConfig) GetPathFields() []struct {
 	}
 }
 
-func (cfg *Config) validateModuleDependencies() error {
+func (cfg *Config) checkModuleDependencies() error {
 	managedSet := make(map[string]bool)
 
 	for _, module := range cfg.ManagedModules {

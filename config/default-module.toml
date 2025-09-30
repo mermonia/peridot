@@ -3,7 +3,7 @@
 root = "~"
 
 # Files/Patterns to ignore during deployment.
-ignore = [".dotconfig.toml"]
+ignore = ["module.toml"]
 
 # Required binaries/commands.
 dependencies = []
