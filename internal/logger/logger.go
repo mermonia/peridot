@@ -8,7 +8,7 @@ import (
 )
 
 var defaultHandler = NewCustomHandler(os.Stdout,
-	&CustomOptions{Level: slog.LevelInfo, HidePC: true})
+	&CustomOptions{Level: slog.LevelDebug, HidePC: true})
 
 var defaultLogger = slog.New(defaultHandler)
 
