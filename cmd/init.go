@@ -10,6 +10,8 @@ import (
 )
 
 func ExecuteInit(initDir string, persist bool) error {
+	logger.Info("Executing command...", "command", "init")
+
 	l := config.NewLoader(config.DefaultPathProvider{})
 
 	// Load general configuration
@@ -47,6 +49,7 @@ func ExecuteInit(initDir string, persist bool) error {
 		l.OverwriteConfig(cfg)
 	}
 
+	logger.Info("Successfully executed command!", "command", "init")
 	return nil
 }
 

@@ -15,7 +15,9 @@ func Execute() {
 		Name:                  "peridot",
 		EnableShellCompletion: true,
 		Version:               "v0.1.0",
-		// Author: ,
+		Authors: []any{
+			"Daniel Sanso <cs.daniel.sanso@gmail.com>",
+		},
 		Copyright:   "(c) 2025 Daniel Sanso",
 		Usage:       "feature-rich dotfiles manager",
 		HideHelp:    false,
@@ -40,8 +42,14 @@ func Execute() {
 						Usage:   "add the new module to the config's managed_modules field",
 					},
 				},
+				Arguments: []cli.Argument{
+					&cli.StringArg{
+						Name:  "moduleName",
+						Value: "",
+					},
+				},
 				Action: func(ctx context.Context, c *cli.Command) error {
-					return ExecuteAdd(c.Bool("manage"))
+					return ExecuteAdd(c.StringArg("moduleName"), c.Bool("manage"))
 				},
 			},
 			{

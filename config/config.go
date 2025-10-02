@@ -142,7 +142,7 @@ func (l *Loader) LoadConfig() (*Config, error) {
 		return nil, fmt.Errorf("Invalid configuration: %w", err)
 	}
 
-	logger.Info("Succesfully loaded configuration!")
+	logger.Info("Successfully loaded configuration!")
 	return cfg, nil
 }
 
@@ -175,7 +175,7 @@ func (l *Loader) LoadModules(cfg *Config) (*Config, error) {
 		return cfg, err
 	}
 
-	logger.Info("Succesfully loaded all module configurations!")
+	logger.Info("Successfully loaded all module configurations!")
 	return updatedCfg, nil
 }
 
@@ -474,6 +474,8 @@ func readConfigFromFile(path string, target any) error {
 }
 
 func writeConfigToFile(source any, path string) error {
+	logger.Info("Writing / Overwriting file...", "path", path)
+
 	var buf bytes.Buffer
 	encoder := toml.NewEncoder(&buf)
 	if err := encoder.Encode(source); err != nil {
@@ -484,6 +486,7 @@ func writeConfigToFile(source any, path string) error {
 		return fmt.Errorf("Could not write encoded config to file: %w", err)
 	}
 
+	logger.Info("Writing successful!", "path", path)
 	return nil
 }
 
