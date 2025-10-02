@@ -2,9 +2,12 @@ package cmd
 
 import (
 	"context"
-	"github.com/urfave/cli/v3"
+	"fmt"
 	"log"
 	"os"
+
+	"github.com/mermonia/peridot/internal/paths"
+	"github.com/urfave/cli/v3"
 )
 
 func Execute() {
@@ -29,8 +32,16 @@ func Execute() {
 				Description: "If not already existing, creates a directory and a module config file\n" +
 					"for the specified <module>. By default, the module config will be\n" +
 					"identical to the provided default-module.toml.",
+				Flags: []cli.Flag{
+					&cli.BoolFlag{
+						Name:    "manage",
+						Aliases: []string{"m"},
+						Value:   false,
+						Usage:   "add the new module to the config's managed_modules field",
+					},
+				},
 				Action: func(ctx context.Context, c *cli.Command) error {
-					return ExecuteAdd()
+					return ExecuteAdd(c.Bool("manage"))
 				},
 			},
 			{
@@ -44,18 +55,6 @@ func Execute() {
 					"'dotifles_dir' field of the peridot config, along with directories and\n" +
 					"config files for all modules specified in the 'managed_modules' field.",
 				Flags: []cli.Flag{
-					&cli.StringFlag{
-						Name:    "dir",
-						Aliases: []string{"d"},
-						Value:   "",
-						Usage:   "path of the dir to be initialized",
-					},
-					&cli.BoolFlag{
-						Name:    "here",
-						Aliases: []string{"H"},
-						Value:   false,
-						Usage:   "set the dir to be initialized to the current dir",
-					},
 					&cli.BoolFlag{
 						Name:    "persist",
 						Aliases: []string{"p"},
@@ -64,8 +63,51 @@ func Execute() {
 							"overwrite the current user dir's configuration file's dotfiles_dir field.",
 					},
 				},
+				MutuallyExclusiveFlags: []cli.MutuallyExclusiveFlags{
+					{
+						Required: false,
+						Flags: [][]cli.Flag{
+							{
+								&cli.StringFlag{
+									Name:    "dir",
+									Aliases: []string{"d"},
+									Value:   "",
+									Usage:   "path of the dir to be initialized",
+								},
+							},
+							{
+								&cli.BoolFlag{
+									Name:    "here",
+									Aliases: []string{"H"},
+									Value:   false,
+									Usage:   "set the dir to be initialized to the current dir",
+								},
+							},
+						},
+					},
+				},
 				Action: func(ctx context.Context, c *cli.Command) error {
-					return ExecuteInit()
+					cwd, err := os.Getwd()
+					if err != nil {
+						return fmt.Errorf("Could not initialize dotfiles_dir: %w", err)
+					}
+
+					var initDir string
+					// Infer initDir from the flags. Even though some flags technically override
+					// others, they are mutually exclusive. The code's priority order should be
+					// ignored in practice.
+					if c.Bool("here") {
+						initDir = cwd
+					}
+					if c.String("dir") != "" {
+						initDir, err = paths.ResolvePath(c.String("dir"), cwd)
+
+						if err != nil {
+							return fmt.Errorf("Could not initialize dir scpecified by the --dir flag: %w", err)
+						}
+					}
+
+					return ExecuteInit(initDir, c.Bool("persist"))
 				},
 			},
 			{

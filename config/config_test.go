@@ -179,17 +179,17 @@ func validateConfigFields(t *testing.T, cfg *Config, tempDir string) {
 		},
 		{
 			name:   "number of modules",
-			value:  len(cfg.Modules),
+			value:  len(cfg.modules),
 			target: 2,
 		},
 		{
 			name:   "nvim module existence",
-			value:  cfg.Modules["nvim"] != nil,
+			value:  cfg.modules["nvim"] != nil,
 			target: true,
 		},
 		{
 			name:   "hyprland module existence",
-			value:  cfg.Modules["hyprland"] != nil,
+			value:  cfg.modules["hyprland"] != nil,
 			target: true,
 		},
 	}
@@ -200,7 +200,7 @@ func validateConfigFields(t *testing.T, cfg *Config, tempDir string) {
 }
 
 func validateModuleConfigFields(t *testing.T, cfg *Config, tempDir string) {
-	nvimMcfg := cfg.Modules["nvim"]
+	nvimMcfg := cfg.modules["nvim"]
 	nvimConfigTestTable := []fieldToValidate{
 		{
 			name:   "nvim root",
@@ -246,7 +246,7 @@ func validateModuleConfigFields(t *testing.T, cfg *Config, tempDir string) {
 		validateField(field, t)
 	}
 
-	hyprlandMcfg := cfg.Modules["hyprland"]
+	hyprlandMcfg := cfg.modules["hyprland"]
 	hyprlandConfigTestTable := []fieldToValidate{
 		{
 			name:   "hyprland root",

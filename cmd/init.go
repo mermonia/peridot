@@ -9,14 +9,21 @@ import (
 	"github.com/mermonia/peridot/internal/logger"
 )
 
-func ExecuteInit() error {
+func ExecuteInit(initDir string, persist bool) error {
 	l := config.NewLoader(config.DefaultPathProvider{})
 
+	// Load general configuration
 	cfg, err := l.LoadConfig()
 	if err != nil {
 		return err
 	}
 
+	// Flags override config files
+	if initDir != "" {
+		cfg.DotfilesDir = initDir
+	}
+
+	// Missing dirs / files creation
 	if err := createMissingDirs(cfg); err != nil {
 		return err
 	}
@@ -29,9 +36,15 @@ func ExecuteInit() error {
 		return err
 	}
 
+	// Module loading (module config existence is needed)
 	cfg, err = l.LoadModules(cfg)
 	if err != nil {
 		return err
+	}
+
+	// Write to config file,
+	if persist && initDir != "" {
+		l.OverwriteConfig(cfg)
 	}
 
 	return nil

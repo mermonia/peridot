@@ -1,14 +1,15 @@
 package config
 
 import (
+	"bytes"
 	_ "embed"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/BurntSushi/toml"
 	"github.com/mermonia/peridot/internal/logger"
+	"github.com/mermonia/peridot/internal/paths"
 )
 
 //go:embed default.toml
@@ -20,14 +21,31 @@ var DefaultModuleConfig []byte
 var GeneralConfigFileName string = "peridot.toml"
 var ModuleConfigFileName string = "module.toml"
 
+type ConfigSource int
+
+const (
+	Embedded ConfigSource = iota
+	UserConfigPath
+)
+
+var sourceName = map[ConfigSource]string{
+	Embedded:       "embedded",
+	UserConfigPath: "user-config-path",
+}
+
+func (cs ConfigSource) String() string {
+	return sourceName[cs]
+}
+
 type Config struct {
 	DotfilesDir    string   `toml:"dotfiles_dir"`
 	BackupDir      string   `toml:"backup_dir"`
 	DefaultRoot    string   `toml:"default_root"`
 	ManagedModules []string `toml:"managed_modules"`
 
-	// Modules are loaded based on the managed_modules field
-	Modules map[string]*ModuleConfig `toml:"-"`
+	// modules are loaded based on the managed_modules field
+	modules map[string]*ModuleConfig `toml:"-"`
+	source  ConfigSource
 }
 
 type ModuleConfig struct {
@@ -92,21 +110,25 @@ func (l *Loader) LoadConfig() (*Config, error) {
 	logger.Info("Starting configuration loading...")
 
 	cfg := &Config{}
-	cfg.Modules = make(map[string]*ModuleConfig)
+	cfg.modules = make(map[string]*ModuleConfig)
 
 	// Try to load embedded config
 	if _, err := toml.Decode(string(DefaultConfig), cfg); err != nil {
 		return nil, fmt.Errorf("Failed to decode embedded config: %w", err)
+	} else {
+		cfg.source = Embedded
 	}
 
 	// Try to load user config (e.g. ~/.config/peridot/peridot.toml)
 	if path, err := l.pathProvider.UserConfigPath(); err == nil {
-		err := decodeToml(path, cfg)
+		err := readConfigFromFile(path, cfg)
 
 		if os.IsNotExist(err) {
 			logger.Warn("Could not find user configuration for peridot", "path", path)
 		} else if err != nil {
 			logger.Warn("The user configuration for peridot has an invalid format, skipping...")
+		} else {
+			cfg.source = UserConfigPath
 		}
 	}
 
@@ -162,18 +184,18 @@ func (l *Loader) loadModuleConfigFiles(cfg *Config) error {
 		modulePath := filepath.Join(cfg.DotfilesDir, module, ModuleConfigFileName)
 
 		mCfg := &ModuleConfig{}
-		if err := decodeToml(modulePath, mCfg); err != nil {
+		if err := readConfigFromFile(modulePath, mCfg); err != nil {
 			return fmt.Errorf("Failed to decode module config %s: %w", module, err)
 		}
 
-		cfg.Modules[module] = mCfg
+		cfg.modules[module] = mCfg
 	}
 
 	return nil
 }
 
 func (cfg *Config) validateModules() error {
-	for moduleName, mCfg := range cfg.Modules {
+	for moduleName, mCfg := range cfg.modules {
 		if err := mCfg.validate(); err != nil {
 			return fmt.Errorf("Invalid configuration for module '%s': %w", moduleName, err)
 		}
@@ -182,12 +204,12 @@ func (cfg *Config) validateModules() error {
 }
 
 func (l *Loader) resolveModuleConfigPaths(cfg *Config) error {
-	for moduleName, mCfg := range cfg.Modules {
+	for moduleName, mCfg := range cfg.modules {
 		pathFields := mCfg.GetPathFields()
 		base := filepath.Join(cfg.DotfilesDir, moduleName)
 
 		for _, field := range pathFields {
-			newPath, err := l.resolvePath(*field.Value, base)
+			newPath, err := paths.ResolvePath(*field.Value, base)
 
 			if err != nil {
 				return fmt.Errorf("Could not resolve path fields for module %s: %w", moduleName, err)
@@ -209,11 +231,12 @@ func (cfg *Config) DeepCopy() *Config {
 		DefaultRoot:    cfg.DefaultRoot,
 		BackupDir:      cfg.BackupDir,
 		ManagedModules: append([]string{}, cfg.ManagedModules...),
-		Modules:        make(map[string]*ModuleConfig),
+		modules:        make(map[string]*ModuleConfig),
+		source:         cfg.source,
 	}
 
-	for moduleName, mCfg := range cfg.Modules {
-		newCfg.Modules[moduleName] = mCfg.DeepCopy()
+	for moduleName, mCfg := range cfg.modules {
+		newCfg.modules[moduleName] = mCfg.DeepCopy()
 	}
 
 	return newCfg
@@ -259,7 +282,7 @@ func (l *Loader) resolveConfigPaths(cfg *Config) error {
 	}
 
 	for _, field := range pathFields {
-		resolved, err := l.resolvePath(*field.Value, base)
+		resolved, err := paths.ResolvePath(*field.Value, base)
 
 		if err != nil {
 			return err
@@ -269,32 +292,6 @@ func (l *Loader) resolveConfigPaths(cfg *Config) error {
 	}
 
 	return nil
-}
-
-func (l *Loader) resolvePath(path string, base string) (string, error) {
-	// Resolve leading tildes
-	if s, found := strings.CutPrefix(path, "~"); found {
-		homeDir, err := os.UserHomeDir()
-
-		if err != nil {
-			return "", fmt.Errorf("Failed to find user home dir while resolving a tilde in the path %s: %w", path, err)
-		}
-
-		path = filepath.Join(homeDir, s)
-	}
-
-	if filepath.IsAbs(path) {
-		return filepath.Clean(path), nil
-	}
-
-	resolved := filepath.Join(base, path)
-	absPath, err := filepath.Abs(resolved)
-
-	if err != nil {
-		return "", fmt.Errorf("Could not resolve relative path: %s, %w", path, err)
-	}
-
-	return absPath, nil
 }
 
 func (cfg *Config) validate() error {
@@ -409,7 +406,7 @@ func (cfg *Config) checkModuleDependencies() error {
 		managedSet[module] = true
 	}
 
-	for moduleName, mCfg := range cfg.Modules {
+	for moduleName, mCfg := range cfg.modules {
 		for _, dep := range mCfg.ModuleDependencies {
 			if !managedSet[dep] {
 				return fmt.Errorf(
@@ -427,7 +424,7 @@ func (cfg *Config) checkCircularModuleDependencies() error {
 	visited := make(map[string]bool)
 	recursionStack := make(map[string]bool)
 
-	modules := cfg.Modules
+	modules := cfg.modules
 	for moduleName := range modules {
 		if !visited[moduleName] && cfg.hasCycle(moduleName, visited, recursionStack) {
 			return fmt.Errorf("Detected cyclical module dependency regarding the module %s", moduleName)
@@ -441,7 +438,7 @@ func (cfg *Config) hasCycle(moduleName string, visited, recursionStack map[strin
 	visited[moduleName] = true
 	recursionStack[moduleName] = true
 
-	mCfg := cfg.Modules[moduleName]
+	mCfg := cfg.modules[moduleName]
 
 	deps := mCfg.ModuleDependencies
 	for _, dep := range deps {
@@ -458,7 +455,7 @@ func (cfg *Config) hasCycle(moduleName string, visited, recursionStack map[strin
 	return false
 }
 
-func decodeToml(path string, target any) error {
+func readConfigFromFile(path string, target any) error {
 	_, err := os.Stat(path)
 
 	if os.IsNotExist(err) {
@@ -474,4 +471,32 @@ func decodeToml(path string, target any) error {
 	}
 
 	return nil
+}
+
+func writeConfigToFile(source any, path string) error {
+	var buf bytes.Buffer
+	encoder := toml.NewEncoder(&buf)
+	if err := encoder.Encode(source); err != nil {
+		return fmt.Errorf("Could not encode the given struct to toml: %w", err)
+	}
+
+	if err := os.WriteFile(path, buf.Bytes(), 0766); err != nil {
+		return fmt.Errorf("Could not write encoded config to file: %w", err)
+	}
+
+	return nil
+}
+
+func (l *Loader) OverwriteConfig(cfg *Config) error {
+	if cfg.source == Embedded {
+		logger.Warn("Peridot is using the embbeded config, skipping config file override...")
+		return nil
+	}
+
+	path, err := l.pathProvider.UserConfigPath()
+	if err != nil {
+		return fmt.Errorf("Could not overwrite configuration: %w", err)
+	}
+
+	return writeConfigToFile(cfg, path)
 }
