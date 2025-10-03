@@ -1,15 +1,96 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/mermonia/peridot/config"
 	"github.com/mermonia/peridot/internal/logger"
+	"github.com/mermonia/peridot/internal/paths"
+	"github.com/urfave/cli/v3"
 )
 
-func ExecuteInit(initDir string, persist bool) error {
+type InitCommandConfig struct {
+	InitDir string
+	Persist bool
+}
+
+var initCommandDescription string = `
+If not already existing, creates the directory specified in the
+"dotfiles_dir" field of the peridot config, along with directories
+and config files for all modules specified in the "managed_modules"
+field.
+`
+
+var InitCommand cli.Command = cli.Command{
+	Name:        "init",
+	Aliases:     []string{"i"},
+	Usage:       "initialize dotfiles dir",
+	Description: initCommandDescription,
+	Flags: []cli.Flag{
+		&cli.BoolFlag{
+			Name:    "persist",
+			Aliases: []string{"p"},
+			Value:   false,
+			Usage:   "overwrite the user config when setting a new dotfiles dir",
+		},
+	},
+	MutuallyExclusiveFlags: []cli.MutuallyExclusiveFlags{
+		{
+			Required: false,
+			Flags: [][]cli.Flag{
+				{
+					&cli.StringFlag{
+						Name:    "dir",
+						Aliases: []string{"d"},
+						Value:   "",
+						Usage:   "path of the dir to be initialized",
+					},
+				},
+				{
+					&cli.BoolFlag{
+						Name:    "here",
+						Aliases: []string{"H"},
+						Value:   false,
+						Usage:   "set the dir to be initialized to the current dir",
+					},
+				},
+			},
+		},
+	},
+	Action: func(ctx context.Context, c *cli.Command) error {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("Could not initialize dotfiles_dir: %w", err)
+		}
+
+		var initDir string
+		// Infer initDir from the flags. Even though some flags technically override
+		// others, they are mutually exclusive. The code's priority order should be
+		// ignored in practice.
+		if c.Bool("here") {
+			initDir = cwd
+		}
+		if c.String("dir") != "" {
+			initDir, err = paths.ResolvePath(c.String("dir"), cwd)
+
+			if err != nil {
+				return fmt.Errorf("Could not initialize dir scpecified by the --dir flag: %w", err)
+			}
+		}
+
+		cmdCfg := &InitCommandConfig{
+			InitDir: initDir,
+			Persist: c.Bool("persist"),
+		}
+
+		return ExecuteInit(cmdCfg)
+	},
+}
+
+func ExecuteInit(cmdCfg *InitCommandConfig) error {
 	logger.Info("Executing command...", "command", "init")
 
 	l := config.NewLoader(config.DefaultPathProvider{})
@@ -21,8 +102,8 @@ func ExecuteInit(initDir string, persist bool) error {
 	}
 
 	// Flags override config files
-	if initDir != "" {
-		cfg.DotfilesDir = initDir
+	if cmdCfg.InitDir != "" {
+		cfg.DotfilesDir = cmdCfg.InitDir
 	}
 
 	// Missing dirs / files creation
@@ -45,7 +126,7 @@ func ExecuteInit(initDir string, persist bool) error {
 	}
 
 	// Write to config file,
-	if persist && initDir != "" {
+	if cmdCfg.Persist && cmdCfg.InitDir != "" {
 		l.OverwriteConfig(cfg)
 	}
 

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -8,12 +9,54 @@ import (
 
 	"github.com/mermonia/peridot/config"
 	"github.com/mermonia/peridot/internal/logger"
+	"github.com/urfave/cli/v3"
 )
 
-func ExecuteAdd(moduleName string, manageModule bool) error {
+type AddCommandConfig struct {
+	ManageModule bool
+	ModuleName   string
+}
+
+var addCommandDescription string = `
+If not already existing, creates a directory and a module config file
+for the specified <module>. By default, the module config will be
+identical to the provided default-module.toml
+`
+
+var AddCommand cli.Command = cli.Command{
+	Name:        "add",
+	Aliases:     []string{"a"},
+	Usage:       "add a module to the peridot dotfiles directory",
+	ArgsUsage:   "<module>",
+	Description: addCommandDescription,
+	Flags: []cli.Flag{
+		&cli.BoolFlag{
+			Name:    "manage",
+			Aliases: []string{"m"},
+			Value:   false,
+			Usage:   "add the new module to the config's managed_modules field",
+		},
+	},
+	Arguments: []cli.Argument{
+		&cli.StringArg{
+			Name:  "moduleName",
+			Value: "",
+		},
+	},
+	Action: func(ctx context.Context, c *cli.Command) error {
+		cmdCfg := &AddCommandConfig{
+			ManageModule: c.Bool("manage"),
+			ModuleName:   c.StringArg("moduleName"),
+		}
+
+		return ExecuteAdd(cmdCfg)
+	},
+}
+
+func ExecuteAdd(cmdCfg *AddCommandConfig) error {
 	logger.Info("Executing command...", "command", "add")
 
-	if moduleName == "" {
+	if cmdCfg.ModuleName == "" {
 		return fmt.Errorf("Cannot create a module with an empty name! Did you set the module argument?")
 	}
 
@@ -23,15 +66,15 @@ func ExecuteAdd(moduleName string, manageModule bool) error {
 		return fmt.Errorf("Could not load config in add command: %w", err)
 	}
 
-	moduleDir := filepath.Join(cfg.DotfilesDir, moduleName)
+	moduleDir := filepath.Join(cfg.DotfilesDir, cmdCfg.ModuleName)
 	moduleConfigPath := filepath.Join(moduleDir, config.ModuleConfigFileName)
 
 	if err := createModuleIfMissing(moduleDir, moduleConfigPath); err != nil {
 		return err
 	}
 
-	if manageModule && !slices.Contains(cfg.ManagedModules, moduleName) {
-		cfg.ManagedModules = append(cfg.ManagedModules, moduleName)
+	if cmdCfg.ManageModule && !slices.Contains(cfg.ManagedModules, cmdCfg.ModuleName) {
+		cfg.ManagedModules = append(cfg.ManagedModules, cmdCfg.ModuleName)
 		l.OverwriteConfig(cfg)
 	}
 
