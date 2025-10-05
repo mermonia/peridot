@@ -20,6 +20,19 @@ func TestTree(t *testing.T) {
 					},
 					{
 						Value: "grandchild2",
+						Nodes: []*Node{
+							{
+								Value: "grandgrandchild1",
+								Nodes: nil,
+							},
+							{
+								Value: "grandgrandchild2",
+								Nodes: nil,
+							},
+						},
+					},
+					{
+						Value: "grandchild3",
 						Nodes: nil,
 					},
 				},

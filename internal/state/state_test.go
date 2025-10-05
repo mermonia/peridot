@@ -34,4 +34,13 @@ func TestGetStateFileTree(t *testing.T) {
 	}
 
 	tree.PrintTree(tr, tree.DefaultTreeBranchSymbols, os.Stdout)
+
+	tr, err = GetModuleFileTree("hyprland", &ModuleState{
+		DeployedAt: time.Now(),
+		Files: map[string]*Entry{
+			".config/hypr/hyprland.conf": {},
+		},
+	})
+
+	tree.PrintTree(tr, tree.DefaultTreeBranchSymbols, os.Stdout)
 }

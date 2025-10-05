@@ -27,33 +27,73 @@ var DefaultTreeBranchSymbols TreeBranchSymbols = TreeBranchSymbols{
 	Space:      "    ",
 }
 
+// func PrintTree(root *Node, syms TreeBranchSymbols, out io.Writer) {
+// 	// Print the root
+// 	printBranch("", root, 0, syms, out)
+// }
+//
+// func printBranch(rootPrefix string, root *Node, indLevel int, syms TreeBranchSymbols, out io.Writer) {
+// 	// Print the root
+// 	fmt.Fprintln(out, rootPrefix+root.Value)
+//
+// 	// Print the sub-branches
+// 	for i := 0; i < len(root.Nodes); i++ {
+// 		// Prefix without vertical line
+// 		prefix := strings.Repeat(syms.Space, indLevel) + syms.Branch
+//
+// 		// Change branch symbol if last node
+// 		if i == len(root.Nodes)-1 {
+// 			prefix = strings.Repeat(syms.Space, indLevel) + syms.LastBranch
+// 		} else if indLevel != 0 {
+// 			// Add vertical line if first indLevel
+// 			prefix = syms.Vertical + strings.Repeat(syms.Space, indLevel-1) + syms.Branch
+// 		}
+//
+// 		printBranch(prefix, root.Nodes[i], indLevel+1, syms, out)
+// 	}
+// }
+
 func PrintTree(root *Node, syms TreeBranchSymbols, out io.Writer) {
-	// Print the root
-	printBranch("", root, 0, syms, out)
+	printBranch([]string{}, root, syms, out)
 }
 
-func printBranch(rootPrefix string, root *Node, indLevel int, syms TreeBranchSymbols, out io.Writer) {
-	// Print the root
-	fmt.Fprintln(out, rootPrefix+root.Value)
+func printBranch(prefix []string, root *Node, syms TreeBranchSymbols, out io.Writer) {
+	// Print the root of the branch
+	fmt.Fprintln(out, strings.Join(prefix, "")+root.Value)
 
 	// Print the sub-branches
 	for i := 0; i < len(root.Nodes); i++ {
-		// Prefix without vertical line
-		prefix := strings.Repeat(syms.Space, indLevel) + syms.Branch
+		isLastBranchNode := i == len(root.Nodes)-1
+		newPrefix := getNewPrefix(prefix, isLastBranchNode, syms)
 
-		// Change branch symbol if last node
-		if i == len(root.Nodes)-1 {
-			prefix = strings.Repeat(syms.Space, indLevel) + syms.LastBranch
-		} else if indLevel != 0 {
-			// Add vertical line if first indLevel
-			prefix = syms.Vertical + strings.Repeat(syms.Space, indLevel-1) + syms.Branch
-		}
-
-		printBranch(prefix, root.Nodes[i], indLevel+1, syms, out)
+		printBranch(newPrefix, root.Nodes[i], syms, out)
 	}
 }
 
-// let's start with creational patterns.
+func getNewPrefix(prevPrefix []string, isLastBranchNode bool, syms TreeBranchSymbols) []string {
+	newPrefix := []string{}
+	prevPrefixLen := len(prevPrefix)
+
+	if prevPrefixLen != 0 {
+		newPrefix = prevPrefix[:prevPrefixLen-1]
+
+		prevPrefixLastSym := prevPrefix[prevPrefixLen-1]
+		if prevPrefixLastSym == syms.Branch || prevPrefixLastSym == syms.Vertical {
+			newPrefix = append(newPrefix, syms.Vertical)
+		} else {
+			newPrefix = append(newPrefix, syms.Space)
+		}
+	}
+
+	if isLastBranchNode {
+		newPrefix = append(newPrefix, syms.LastBranch)
+	} else {
+		newPrefix = append(newPrefix, syms.Branch)
+	}
+
+	return newPrefix
+}
+
 func NewTree(root string) *Node {
 	if root == "" {
 		root = "."
@@ -65,7 +105,7 @@ func NewTree(root string) *Node {
 	}
 }
 
-func (r *Node) AddNode(value string) (*Node, error) {
+func (r *Node) AddValue(value string) (*Node, error) {
 	if value == "" {
 		return nil, fmt.Errorf("Cannot add node with an empty value")
 	}
@@ -78,6 +118,20 @@ func (r *Node) AddNode(value string) (*Node, error) {
 	newNode := &Node{Value: value, Nodes: make([]*Node, 0)}
 	r.Nodes = append(r.Nodes, newNode)
 	return newNode, nil
+}
+
+func (r *Node) Add(node *Node) error {
+	if node == nil {
+		return fmt.Errorf("Cannot add nil as a node")
+	}
+
+	if r == nil {
+		return fmt.Errorf("Cannot add nodes to nil")
+	}
+
+	// append function. might sort it alphabetically later
+	r.Nodes = append(r.Nodes, node)
+	return nil
 }
 
 // DFS implementation
