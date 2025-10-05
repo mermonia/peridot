@@ -28,9 +28,7 @@ func Execute() {
 			{
 				Name: "remove",
 			},
-			{
-				Name: "status",
-			},
+			&StatusCommand,
 		},
 	}
 

@@ -9,23 +9,37 @@ import (
 	"time"
 
 	"github.com/mermonia/peridot/config"
+	"github.com/mermonia/peridot/internal/hash"
 	"github.com/mermonia/peridot/internal/tree"
 )
 
+// State should only be created once, via peridot init.
+// Modifications to state should only be made after loading it from
+// a state file, and the state file should be updated right after.
 type State struct {
 	Modules map[string]*ModuleState `json:"modules"`
 }
 
 type ModuleState struct {
+	Status     DeployStatus      `json:"status"`
 	DeployedAt time.Time         `json:"deployedAt"`
 	Files      map[string]*Entry `json:"files"`
 }
 
 type Entry struct {
-	SourceHash       string `json:"hash"`
-	IntermediatePath string `json:"intermediatePath"`
-	Target           string `json:"target"`
+	Status           DeployStatus `json:"status"`
+	SourceHash       string       `json:"hash"`
+	IntermediatePath string       `json:"intermediatePath"`
+	Target           string       `json:"target"`
 }
+
+type DeployStatus int
+
+const (
+	NotDeployed DeployStatus = iota
+	Unsynced
+	Synced
+)
 
 var StateFilePath string = filepath.Join(".cache", "state.json")
 
@@ -121,4 +135,24 @@ func GetModuleFileTree(name string, module *ModuleState) (*tree.Node, error) {
 		}
 	}
 	return moduleNode, nil
+}
+
+func (s *State) UpdateDeploymentStatus() error {
+	for _, module := range s.Modules {
+		if module.Status != NotDeployed {
+			for path, file := range module.Files {
+				updatedHash, err := hash.HashFile(path)
+				if err != nil {
+					return fmt.Errorf("Could not hash file %s: %w", path, err)
+				}
+
+				if updatedHash != file.SourceHash {
+					file.Status = Unsynced
+					module.Status = Unsynced
+				}
+			}
+		}
+	}
+
+	return nil
 }
