@@ -1,29 +1,71 @@
 package state
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/mermonia/peridot/config"
 	"github.com/mermonia/peridot/internal/tree"
 )
 
 type State struct {
-	// Modules[moduleName] = &ModuleState
-	Modules map[string]*ModuleState
+	Modules map[string]*ModuleState `json:"modules"`
 }
 
 type ModuleState struct {
-	DeployedAt time.Time
-	// Entries[".config/kitty/kitty.conf"] =
-	Files map[string]*Entry
+	DeployedAt time.Time         `json:"deployedAt"`
+	Files      map[string]*Entry `json:"files"`
 }
 
 type Entry struct {
-	SourceHash       string
-	IntermediatePath string
-	Target           string
+	SourceHash       string `json:"hash"`
+	IntermediatePath string `json:"intermediatePath"`
+	Target           string `json:"target"`
+}
+
+var StateFilePath string = filepath.Join(".cache", "state.json")
+
+func LoadState() (*State, error) {
+	l := config.NewConfigLoader(config.DefaultConfigPathProvider{})
+	cfg, err := l.LoadConfig()
+	if err != nil {
+		return nil, fmt.Errorf("Could not load config: %w", err)
+	}
+
+	state := &State{}
+	stateFile, err := os.ReadFile(filepath.Join(cfg.DotfilesDir, StateFilePath))
+	if err != nil {
+		return nil, fmt.Errorf("Could not read state file: %w", err)
+	}
+
+	if err := json.Unmarshal(stateFile, state); err != nil {
+		return nil, fmt.Errorf("Could not decode json state: %w", err)
+	}
+
+	return state, nil
+}
+
+func SaveState(state *State) error {
+	l := config.NewConfigLoader(config.DefaultConfigPathProvider{})
+	cfg, err := l.LoadConfig()
+	if err != nil {
+		return fmt.Errorf("Could not load config: %w", err)
+	}
+
+	stateFile, err := json.Marshal(state)
+	if err != nil {
+		return fmt.Errorf("Could not encode json state: %w", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(cfg.DotfilesDir, StateFilePath), stateFile, 0766); err != nil {
+		return fmt.Errorf("Could not write state file: %w", err)
+	}
+
+	return nil
 }
 
 func GetStateFileTree(state *State) (*tree.Node, error) {

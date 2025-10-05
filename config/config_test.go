@@ -147,7 +147,7 @@ func TestLoad_normalConfig(t *testing.T) {
 		}
 	}
 
-	loader := NewLoader(pathProvider)
+	loader := NewConfigLoader(pathProvider)
 	cfg, err := loader.LoadConfig()
 	cfg, err = loader.LoadModules(cfg)
 
@@ -301,7 +301,7 @@ func validateField(f fieldToValidate, t *testing.T) {
 }
 
 func TestDefaultPathProvider(t *testing.T) {
-	pathProvider := DefaultPathProvider{}
+	pathProvider := DefaultConfigPathProvider{}
 
 	t.Run("UserConfigDir returns valid directory", func(t *testing.T) {
 		dir, err := pathProvider.UserConfigDir()

@@ -70,14 +70,14 @@ type Hooks struct {
 	PostRemove string `toml:"post_remove"`
 }
 
-type PathProvider interface {
+type ConfigPathProvider interface {
 	UserConfigPath() (string, error)
 	UserConfigDir() (string, error)
 }
 
-type DefaultPathProvider struct{}
+type DefaultConfigPathProvider struct{}
 
-func (p DefaultPathProvider) UserConfigDir() (string, error) {
+func (p DefaultConfigPathProvider) UserConfigDir() (string, error) {
 	dir, err := os.UserConfigDir()
 
 	if err != nil {
@@ -87,7 +87,7 @@ func (p DefaultPathProvider) UserConfigDir() (string, error) {
 	return dir, nil
 }
 
-func (p DefaultPathProvider) UserConfigPath() (string, error) {
+func (p DefaultConfigPathProvider) UserConfigPath() (string, error) {
 	base, err := p.UserConfigDir()
 
 	if err != nil {
@@ -98,15 +98,32 @@ func (p DefaultPathProvider) UserConfigPath() (string, error) {
 	return path, nil
 }
 
-type Loader struct {
-	pathProvider PathProvider
+type ConfigLoader struct {
+	pathProvider ConfigPathProvider
 }
 
-func NewLoader(pathProvider PathProvider) *Loader {
-	return &Loader{pathProvider: pathProvider}
+func NewConfigLoader(pathProvider ConfigPathProvider) *ConfigLoader {
+	return &ConfigLoader{pathProvider: pathProvider}
 }
 
-func (l *Loader) LoadConfig() (*Config, error) {
+// Helper interface to expedite standard config loading
+func Load() (*Config, error) {
+	l := NewConfigLoader(DefaultConfigPathProvider{})
+
+	cfg, err := l.LoadConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	cfg, err = l.LoadModules(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	return cfg, nil
+}
+
+func (l *ConfigLoader) LoadConfig() (*Config, error) {
 	logger.Info("Starting configuration loading...")
 
 	cfg := &Config{}
@@ -146,7 +163,7 @@ func (l *Loader) LoadConfig() (*Config, error) {
 	return cfg, nil
 }
 
-func (l *Loader) LoadModules(cfg *Config) (*Config, error) {
+func (l *ConfigLoader) LoadModules(cfg *Config) (*Config, error) {
 	logger.Info("Starting modules configuration loading...")
 	updatedCfg := cfg.DeepCopy()
 
@@ -179,7 +196,7 @@ func (l *Loader) LoadModules(cfg *Config) (*Config, error) {
 	return updatedCfg, nil
 }
 
-func (l *Loader) loadModuleConfigFiles(cfg *Config) error {
+func (l *ConfigLoader) loadModuleConfigFiles(cfg *Config) error {
 	for _, module := range cfg.ManagedModules {
 		modulePath := filepath.Join(cfg.DotfilesDir, module, ModuleConfigFileName)
 
@@ -203,7 +220,7 @@ func (cfg *Config) validateModules() error {
 	return nil
 }
 
-func (l *Loader) resolveModuleConfigPaths(cfg *Config) error {
+func (l *ConfigLoader) resolveModuleConfigPaths(cfg *Config) error {
 	for moduleName, mCfg := range cfg.modules {
 		pathFields := mCfg.GetPathFields()
 		base := filepath.Join(cfg.DotfilesDir, moduleName)
@@ -272,7 +289,7 @@ func (mCfg *ModuleConfig) DeepCopy() *ModuleConfig {
 	return newMCfg
 }
 
-func (l *Loader) resolveConfigPaths(cfg *Config) error {
+func (l *ConfigLoader) resolveConfigPaths(cfg *Config) error {
 	pathFields := cfg.GetPathFields()
 
 	base, err := l.pathProvider.UserConfigDir()
@@ -490,7 +507,7 @@ func writeConfigToFile(source any, path string) error {
 	return nil
 }
 
-func (l *Loader) OverwriteConfig(cfg *Config) error {
+func (l *ConfigLoader) OverwriteConfig(cfg *Config) error {
 	if cfg.source == Embedded {
 		logger.Warn("Peridot is using the embbeded config, skipping config file override...")
 		return nil

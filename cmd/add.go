@@ -60,7 +60,7 @@ func ExecuteAdd(cmdCfg *AddCommandConfig) error {
 		return fmt.Errorf("Cannot create a module with an empty name! Did you set the module argument?")
 	}
 
-	l := config.NewLoader(config.DefaultPathProvider{})
+	l := config.NewConfigLoader(config.DefaultConfigPathProvider{})
 	cfg, err := l.LoadConfig()
 	if err != nil {
 		return fmt.Errorf("Could not load config in add command: %w", err)

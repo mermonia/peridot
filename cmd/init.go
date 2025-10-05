@@ -9,6 +9,7 @@ import (
 	"github.com/mermonia/peridot/config"
 	"github.com/mermonia/peridot/internal/logger"
 	"github.com/mermonia/peridot/internal/paths"
+	"github.com/mermonia/peridot/internal/state"
 	"github.com/urfave/cli/v3"
 )
 
@@ -22,6 +23,8 @@ If not already existing, creates the directory specified in the
 "dotfiles_dir" field of the peridot config, along with directories
 and config files for all modules specified in the "managed_modules"
 field.
+A '.cache/' directory will be created inside the dotfiles_dir, and
+it will be populated by an empty state file 'state.json'
 `
 
 var InitCommand cli.Command = cli.Command{
@@ -93,7 +96,7 @@ var InitCommand cli.Command = cli.Command{
 func ExecuteInit(cmdCfg *InitCommandConfig) error {
 	logger.Info("Executing command...", "command", "init")
 
-	l := config.NewLoader(config.DefaultPathProvider{})
+	l := config.NewConfigLoader(config.DefaultConfigPathProvider{})
 
 	// Load general configuration
 	cfg, err := l.LoadConfig()
@@ -117,6 +120,10 @@ func ExecuteInit(cmdCfg *InitCommandConfig) error {
 
 	if err := createMissingModuleConfigs(cfg); err != nil {
 		return err
+	}
+
+	if err := createStateFile(cfg); err != nil {
+
 	}
 
 	// Module loading (module config existence is needed)
@@ -207,5 +214,21 @@ func createMissingModuleConfigs(cfg *config.Config) error {
 	}
 
 	logger.Info("Successfully created all missing module configs!")
+	return nil
+}
+
+func createStateFile(cfg *config.Config) error {
+	logger.Info("Creating new state file...")
+
+	if err := os.MkdirAll(filepath.Join(cfg.DotfilesDir, ".cache"), 0766); err != nil {
+		return fmt.Errorf("Could not create state file: %w", err)
+	}
+
+	if err := state.SaveState(&state.State{
+		Modules: map[string]*state.ModuleState{},
+	}); err != nil {
+		return fmt.Errorf("Could not save state: %w", err)
+	}
+
 	return nil
 }

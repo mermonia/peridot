@@ -27,32 +27,6 @@ var DefaultTreeBranchSymbols TreeBranchSymbols = TreeBranchSymbols{
 	Space:      "    ",
 }
 
-// func PrintTree(root *Node, syms TreeBranchSymbols, out io.Writer) {
-// 	// Print the root
-// 	printBranch("", root, 0, syms, out)
-// }
-//
-// func printBranch(rootPrefix string, root *Node, indLevel int, syms TreeBranchSymbols, out io.Writer) {
-// 	// Print the root
-// 	fmt.Fprintln(out, rootPrefix+root.Value)
-//
-// 	// Print the sub-branches
-// 	for i := 0; i < len(root.Nodes); i++ {
-// 		// Prefix without vertical line
-// 		prefix := strings.Repeat(syms.Space, indLevel) + syms.Branch
-//
-// 		// Change branch symbol if last node
-// 		if i == len(root.Nodes)-1 {
-// 			prefix = strings.Repeat(syms.Space, indLevel) + syms.LastBranch
-// 		} else if indLevel != 0 {
-// 			// Add vertical line if first indLevel
-// 			prefix = syms.Vertical + strings.Repeat(syms.Space, indLevel-1) + syms.Branch
-// 		}
-//
-// 		printBranch(prefix, root.Nodes[i], indLevel+1, syms, out)
-// 	}
-// }
-
 func PrintTree(root *Node, syms TreeBranchSymbols, out io.Writer) {
 	printBranch([]string{}, root, syms, out)
 }
