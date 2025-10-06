@@ -102,7 +102,8 @@ func GetStateFileTree(state *State) (*tree.Node, error) {
 }
 
 func GetModuleFileTree(name string, module *ModuleState) (*tree.Node, error) {
-	moduleNode := tree.NewTree(name)
+	formattedStatus := getFormattedModuleStatus(name, module)
+	moduleNode := tree.NewTree(formattedStatus)
 
 	// Each dir below a module dir is a node.
 	// A file inside one of those dirs is a leafless node.
@@ -135,6 +136,24 @@ func GetModuleFileTree(name string, module *ModuleState) (*tree.Node, error) {
 		}
 	}
 	return moduleNode, nil
+}
+
+func getFormattedModuleStatus(name string, module *ModuleState) string {
+	formattedStatus := ""
+
+	switch module.Status {
+	case NotDeployed:
+		formattedStatus = "○ " + name + " - not deployed"
+	case Unsynced:
+		formattedStatus = "✗ " + name + " - deployed, pending sync"
+	case Synced:
+		formattedStatus = "✓ " + name + " - deployed and up to date"
+	default:
+		formattedStatus = "? " + name + " - status unknown"
+
+	}
+
+	return formattedStatus
 }
 
 func (s *State) UpdateDeploymentStatus() error {
