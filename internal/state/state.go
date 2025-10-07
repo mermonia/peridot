@@ -107,8 +107,8 @@ func GetModuleFileTree(name string, module *ModuleState) (*tree.Node, error) {
 
 	// Each dir below a module dir is a node.
 	// A file inside one of those dirs is a leafless node.
-	for path := range module.Files {
-		dirPath, file := filepath.Split(path)
+	for path, entry := range module.Files {
+		dirPath, fileName := filepath.Split(path)
 		dirPath = strings.TrimSuffix(dirPath, string(filepath.Separator))
 
 		dirList := strings.Split(dirPath, string(filepath.Separator))
@@ -131,29 +131,12 @@ func GetModuleFileTree(name string, module *ModuleState) (*tree.Node, error) {
 
 		// Since a map does not allow duplicate keys, we don't have to
 		// check for that.
-		if _, err := lastNode.AddValue(file); err != nil {
+		formattedFileStatus := getFormattedFileStatus(fileName, entry)
+		if _, err := lastNode.AddValue(formattedFileStatus); err != nil {
 			return nil, err
 		}
 	}
 	return moduleNode, nil
-}
-
-func getFormattedModuleStatus(name string, module *ModuleState) string {
-	formattedStatus := ""
-
-	switch module.Status {
-	case NotDeployed:
-		formattedStatus = "○ " + name + " - not deployed"
-	case Unsynced:
-		formattedStatus = "✗ " + name + " - deployed, pending sync"
-	case Synced:
-		formattedStatus = "✓ " + name + " - deployed and up to date"
-	default:
-		formattedStatus = "? " + name + " - status unknown"
-
-	}
-
-	return formattedStatus
 }
 
 func (s *State) UpdateDeploymentStatus() error {
@@ -174,4 +157,39 @@ func (s *State) UpdateDeploymentStatus() error {
 	}
 
 	return nil
+}
+
+func getFormattedModuleStatus(name string, module *ModuleState) string {
+	formattedStatus := ""
+
+	switch module.Status {
+	case NotDeployed:
+		formattedStatus = "○ " + name + " - not deployed"
+	case Unsynced:
+		formattedStatus = "✗ " + name + " - deployed, pending sync"
+	case Synced:
+		formattedStatus = "✓ " + name + " - deployed and up to date"
+	default:
+		formattedStatus = "? " + name + " - status unknown"
+
+	}
+
+	return formattedStatus
+}
+
+func getFormattedFileStatus(name string, entry *Entry) string {
+	formattedFileStatus := ""
+
+	switch entry.Status {
+	case NotDeployed:
+		formattedFileStatus = name
+	case Unsynced:
+		formattedFileStatus = "✗ " + name + " <- " + entry.Target
+	case Synced:
+		formattedFileStatus = "✓ " + name + " <- " + entry.Target
+	default:
+		formattedFileStatus = "? " + name
+	}
+
+	return formattedFileStatus
 }

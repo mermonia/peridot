@@ -14,16 +14,30 @@ func TestGetStateFileTree(t *testing.T) {
 			"hyprland": {
 				DeployedAt: time.Now(),
 				Files: map[string]*Entry{
-					".config/hypr/hyprland.conf": {},
+					".config/hypr/hyprland.conf": {
+						Status: Synced,
+						Target: "/home/mermonia/.config/hypr/hyprland",
+					},
 				},
+				Status: Synced,
 			},
 			"waybar": {
 				DeployedAt: time.Now(),
 				Files: map[string]*Entry{
-					".config/waybar/config.jsonc":       {},
-					".config/waybar/style.css":          {},
-					".config/waybar/scripts/spotify.sh": {},
+					".config/waybar/config.jsonc": {
+						Status: Synced,
+						Target: "/home/mermonia/.config/waybar/config.jsonc",
+					},
+					".config/waybar/style.css": {
+						Status: Synced,
+						Target: "/home/mermonia/.config/waybar/style.css",
+					},
+					".config/waybar/scripts/spotify.sh": {
+						Status: Unsynced,
+						Target: "/home/mermonia/.config/waybar/spotify.sh",
+					},
 				},
+				Status: Unsynced,
 			},
 		},
 	}
