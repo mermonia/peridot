@@ -64,24 +64,24 @@ var StatusCommand cli.Command = cli.Command{
 }
 
 func ExecuteStatus() error {
-	l := config.NewConfigLoader(config.DefaultConfigPathProvider{})
-	cfg, err := l.LoadConfig()
+	loader := config.NewConfigLoader(config.DefaultConfigPathProvider{})
+	cfg, err := loader.LoadConfig()
 	if err != nil {
-		return fmt.Errorf("Could not load config: %w", err)
+		return fmt.Errorf("could not load config: %w", err)
 	}
 
 	st, err := state.LoadState()
 	if err != nil {
-		return fmt.Errorf("Could not load state: %w", err)
+		return fmt.Errorf("could not load state: %w", err)
 	}
 
 	if err := st.UpdateDeploymentStatus(); err != nil {
-		return fmt.Errorf("Could not update deployment status: %w", err)
+		return fmt.Errorf("could not update deployment status: %w", err)
 	}
 
 	tr, err := state.GetStateFileTree(st)
 	if err != nil {
-		return fmt.Errorf("Could not get state file tree: %w", err)
+		return fmt.Errorf("could not get state file tree: %w", err)
 	}
 
 	fmt.Println("dotfiles_dir: " + cfg.DotfilesDir)

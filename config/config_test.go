@@ -173,11 +173,6 @@ func validateConfigFields(t *testing.T, cfg *Config, tempDir string) {
 			target: filepath.Join(tempDir, "backups"),
 		},
 		{
-			name:   "root",
-			value:  cfg.DefaultRoot,
-			target: filepath.Join(tempDir, "root"),
-		},
-		{
 			name:   "number of modules",
 			value:  len(cfg.modules),
 			target: 2,
@@ -296,7 +291,7 @@ func validateModuleConfigFields(t *testing.T, cfg *Config, tempDir string) {
 func validateField(f fieldToValidate, t *testing.T) {
 	t.Helper()
 	if !reflect.DeepEqual(f.value, f.target) {
-		t.Errorf("The field %q should be \"%v\", got \"%v\" instead.", f.name, f.target, f.value)
+		t.Errorf("the field %q should be \"%v\", got \"%v\" instead.", f.name, f.target, f.value)
 	}
 }
 

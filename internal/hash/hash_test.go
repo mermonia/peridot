@@ -16,7 +16,7 @@ func TestHash(t *testing.T) {
 	}
 
 	for i, textFile := range textFiles {
-		if err := os.WriteFile(filepath.Join(dir, "textFile"+strconv.Itoa(i)), []byte(textFile), 0766); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "textFile"+strconv.Itoa(i)), []byte(textFile), 0644); err != nil {
 			t.Fatalf("Could not write text file %d", i)
 		}
 	}

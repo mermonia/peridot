@@ -13,7 +13,7 @@ func ResolvePath(path string, base string) (string, error) {
 		homeDir, err := os.UserHomeDir()
 
 		if err != nil {
-			return "", fmt.Errorf("Failed to find user home dir while resolving a tilde in the path %s: %w", path, err)
+			return "", fmt.Errorf("failed to find user home dir while resolving a tilde in the path %s: %w", path, err)
 		}
 
 		path = filepath.Join(homeDir, s)
@@ -27,7 +27,7 @@ func ResolvePath(path string, base string) (string, error) {
 	absPath, err := filepath.Abs(resolved)
 
 	if err != nil {
-		return "", fmt.Errorf("Could not resolve relative path: %s, %w", path, err)
+		return "", fmt.Errorf("could not resolve relative path: %s, %w", path, err)
 	}
 
 	return absPath, nil

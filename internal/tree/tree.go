@@ -81,11 +81,11 @@ func NewTree(root string) *Node {
 
 func (r *Node) AddValue(value string) (*Node, error) {
 	if value == "" {
-		return nil, fmt.Errorf("Cannot add node with an empty value")
+		return nil, fmt.Errorf("cannot add node with an empty value")
 	}
 
 	if r == nil {
-		return nil, fmt.Errorf("Cannot add nodes to nil")
+		return nil, fmt.Errorf("cannot add nodes to nil")
 	}
 
 	// append function. might sort it alphabetically later
@@ -96,11 +96,11 @@ func (r *Node) AddValue(value string) (*Node, error) {
 
 func (r *Node) Add(node *Node) error {
 	if node == nil {
-		return fmt.Errorf("Cannot add nil as a node")
+		return fmt.Errorf("cannot add nil as a node")
 	}
 
 	if r == nil {
-		return fmt.Errorf("Cannot add nodes to nil")
+		return fmt.Errorf("cannot add nodes to nil")
 	}
 
 	// append function. might sort it alphabetically later

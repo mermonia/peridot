@@ -17,6 +17,11 @@ type DeployCommandConfig struct {
 var deployCommandDescription string = `
 If not already, deploys the files in the specified module directory.
 
+Before deploying a module, both their dependencies and module dependencies
+(that is, modules that should be deployed before them) are checked.
+If a dependency is not satisfied, the module will not be deployed and
+the command will return an error.
+
 In order to facilitate some of peridot's features (mainly templating),
 the symlinks that are created in the filesystem are not links to the
 module dir's files themselves. Instead, they point to an intermediate

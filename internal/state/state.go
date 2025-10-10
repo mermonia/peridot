@@ -44,39 +44,39 @@ const (
 var StateFilePath string = filepath.Join(".cache", "state.json")
 
 func LoadState() (*State, error) {
-	l := config.NewConfigLoader(config.DefaultConfigPathProvider{})
-	cfg, err := l.LoadConfig()
+	loader := config.NewConfigLoader(config.DefaultConfigPathProvider{})
+	cfg, err := loader.LoadConfig()
 	if err != nil {
-		return nil, fmt.Errorf("Could not load config: %w", err)
+		return nil, fmt.Errorf("could not load config: %w", err)
 	}
 
 	state := &State{}
 	stateFile, err := os.ReadFile(filepath.Join(cfg.DotfilesDir, StateFilePath))
 	if err != nil {
-		return nil, fmt.Errorf("Could not read state file: %w", err)
+		return nil, fmt.Errorf("could not read state file: %w", err)
 	}
 
 	if err := json.Unmarshal(stateFile, state); err != nil {
-		return nil, fmt.Errorf("Could not decode json state: %w", err)
+		return nil, fmt.Errorf("could not decode json state: %w", err)
 	}
 
 	return state, nil
 }
 
 func SaveState(state *State) error {
-	l := config.NewConfigLoader(config.DefaultConfigPathProvider{})
-	cfg, err := l.LoadConfig()
+	loader := config.NewConfigLoader(config.DefaultConfigPathProvider{})
+	cfg, err := loader.LoadConfig()
 	if err != nil {
-		return fmt.Errorf("Could not load config: %w", err)
+		return fmt.Errorf("could not load config: %w", err)
 	}
 
 	stateFile, err := json.Marshal(state)
 	if err != nil {
-		return fmt.Errorf("Could not encode json state: %w", err)
+		return fmt.Errorf("could not encode json state: %w", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(cfg.DotfilesDir, StateFilePath), stateFile, 0766); err != nil {
-		return fmt.Errorf("Could not write state file: %w", err)
+	if err := os.WriteFile(filepath.Join(cfg.DotfilesDir, StateFilePath), stateFile, 0644); err != nil {
+		return fmt.Errorf("could not write state file: %w", err)
 	}
 
 	return nil
@@ -90,11 +90,11 @@ func GetStateFileTree(state *State) (*tree.Node, error) {
 		// Each module is a first-level node
 		moduleNode, err := GetModuleFileTree(name, module)
 		if err != nil {
-			return nil, fmt.Errorf("Could not get moudule file tree: %w", err)
+			return nil, fmt.Errorf("could not get moudule file tree: %w", err)
 		}
 
 		if err := newTree.Add(moduleNode); err != nil {
-			return nil, fmt.Errorf("Could not add node to the tree: %w", err)
+			return nil, fmt.Errorf("could not add node to the tree: %w", err)
 		}
 	}
 
@@ -145,7 +145,7 @@ func (s *State) UpdateDeploymentStatus() error {
 			for path, file := range module.Files {
 				updatedHash, err := hash.HashFile(path)
 				if err != nil {
-					return fmt.Errorf("Could not hash file %s: %w", path, err)
+					return fmt.Errorf("could not hash file %s: %w", path, err)
 				}
 
 				if updatedHash != file.SourceHash {

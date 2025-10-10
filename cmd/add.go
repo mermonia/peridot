@@ -3,12 +3,11 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"slices"
 
 	"github.com/mermonia/peridot/config"
 	"github.com/mermonia/peridot/internal/logger"
+	"github.com/mermonia/peridot/internal/modmgr"
 	"github.com/urfave/cli/v3"
 )
 
@@ -54,52 +53,27 @@ var AddCommand cli.Command = cli.Command{
 }
 
 func ExecuteAdd(cmdCfg *AddCommandConfig) error {
-	logger.Info("Executing command...", "command", "add")
-
 	if cmdCfg.ModuleName == "" {
-		return fmt.Errorf("Cannot create a module with an empty name! Did you set the module argument?")
+		return fmt.Errorf("cannot create a module with an empty name. did you set the module argument?")
 	}
 
-	l := config.NewConfigLoader(config.DefaultConfigPathProvider{})
-	cfg, err := l.LoadConfig()
+	loader := config.NewConfigLoader(config.DefaultConfigPathProvider{})
+	cfg, err := loader.LoadConfig()
 	if err != nil {
-		return fmt.Errorf("Could not load config in add command: %w", err)
+		return fmt.Errorf("could not load config %w", err)
 	}
 
-	moduleDir := filepath.Join(cfg.DotfilesDir, cmdCfg.ModuleName)
-	moduleConfigPath := filepath.Join(moduleDir, config.ModuleConfigFileName)
+	dotfilesDir := cfg.DotfilesDir
 
-	if err := createModuleIfMissing(moduleDir, moduleConfigPath); err != nil {
+	if err := modmgr.AddModule(cmdCfg.ModuleName, dotfilesDir); err != nil {
 		return err
 	}
 
 	if cmdCfg.ManageModule && !slices.Contains(cfg.ManagedModules, cmdCfg.ModuleName) {
 		cfg.ManagedModules = append(cfg.ManagedModules, cmdCfg.ModuleName)
-		l.OverwriteConfig(cfg)
+		loader.OverwriteConfig(cfg)
 	}
 
 	logger.Info("Successfully executed command!", "command", "add")
-	return nil
-}
-
-func createModuleIfMissing(moduleDir string, moduleConfigPath string) error {
-	if _, err := os.Stat(moduleDir); os.IsNotExist(err) {
-		if err := os.MkdirAll(moduleDir, 0766); err != nil {
-			return fmt.Errorf("Could not create dir %s: %w", moduleDir, err)
-		}
-	} else if err != nil {
-		return fmt.Errorf("Could not stat the dir %s. Are there any permission conflicts?: %w",
-			moduleDir, err)
-	}
-
-	if _, err := os.Stat(moduleConfigPath); os.IsNotExist(err) {
-		if err := os.WriteFile(moduleConfigPath, config.DefaultModuleConfig, 0766); err != nil {
-			return fmt.Errorf("Could not create file %s: %w", moduleConfigPath, err)
-		}
-	} else if err != nil {
-		return fmt.Errorf("Could not stat the file %s. Are there any permission conflicts?: %w",
-			moduleConfigPath, err)
-	}
-
 	return nil
 }

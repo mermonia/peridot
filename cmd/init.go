@@ -8,6 +8,7 @@ import (
 
 	"github.com/mermonia/peridot/config"
 	"github.com/mermonia/peridot/internal/logger"
+	"github.com/mermonia/peridot/internal/modmgr"
 	"github.com/mermonia/peridot/internal/paths"
 	"github.com/mermonia/peridot/internal/state"
 	"github.com/urfave/cli/v3"
@@ -66,7 +67,7 @@ var InitCommand cli.Command = cli.Command{
 	Action: func(ctx context.Context, c *cli.Command) error {
 		cwd, err := os.Getwd()
 		if err != nil {
-			return fmt.Errorf("Could not initialize dotfiles_dir: %w", err)
+			return fmt.Errorf("could not initialize dotfiles_dir: %w", err)
 		}
 
 		var initDir string
@@ -80,7 +81,7 @@ var InitCommand cli.Command = cli.Command{
 			initDir, err = paths.ResolvePath(c.String("dir"), cwd)
 
 			if err != nil {
-				return fmt.Errorf("Could not initialize dir scpecified by the --dir flag: %w", err)
+				return fmt.Errorf("could not initialize dir scpecified by the --dir flag: %w", err)
 			}
 		}
 
@@ -94,12 +95,10 @@ var InitCommand cli.Command = cli.Command{
 }
 
 func ExecuteInit(cmdCfg *InitCommandConfig) error {
-	logger.Info("Executing command...", "command", "init")
-
-	l := config.NewConfigLoader(config.DefaultConfigPathProvider{})
+	loader := config.NewConfigLoader(config.DefaultConfigPathProvider{})
 
 	// Load general configuration
-	cfg, err := l.LoadConfig()
+	cfg, err := loader.LoadConfig()
 	if err != nil {
 		return err
 	}
@@ -114,120 +113,63 @@ func ExecuteInit(cmdCfg *InitCommandConfig) error {
 		return err
 	}
 
-	if err := createMissingModuleDirs(cfg); err != nil {
-		return err
-	}
-
-	if err := createMissingModuleConfigs(cfg); err != nil {
+	if err := addMissingModules(cfg); err != nil {
 		return err
 	}
 
 	if err := createStateFile(cfg); err != nil {
-
+		return err
 	}
 
 	// Module loading (module config existence is needed)
-	cfg, err = l.LoadModules(cfg)
+	cfg, err = loader.LoadModules(cfg)
 	if err != nil {
 		return err
 	}
 
 	// Write to config file,
 	if cmdCfg.Persist && cmdCfg.InitDir != "" {
-		l.OverwriteConfig(cfg)
+		loader.OverwriteConfig(cfg)
 	}
 
 	logger.Info("Successfully executed command!", "command", "init")
 	return nil
 }
 
-func createMissingDirs(cfg *config.Config) error {
-	logger.Info("Creating missing general config dirs...")
+func addMissingModules(cfg *config.Config) error {
+	modules := cfg.ManagedModules
+	dotfilesDir := cfg.DotfilesDir
 
-	possibleDirs := cfg.GetPathFields()
-	for _, dir := range possibleDirs {
-		if _, err := os.Stat(*dir.Value); os.IsNotExist(err) {
-			logger.Info("About to create dir...", "dir", *dir.Value)
-
-			if err := os.MkdirAll(*dir.Value, 0766); err != nil {
-				return fmt.Errorf("Could not create missing dir %s: \n%w", *dir.Value, err)
-			}
-
-			logger.Info("Successfully created dir!", "dir", *dir.Value)
-		} else if err != nil {
+	for _, module := range modules {
+		if err := modmgr.AddModule(module, dotfilesDir); err != nil {
 			return err
 		}
 	}
 
+	return nil
+}
+
+func createMissingDirs(cfg *config.Config) error {
+	possibleDirs := cfg.GetPathFields()
+	for _, dir := range possibleDirs {
+		if err := os.MkdirAll(*dir.Value, 0755); err != nil {
+			return fmt.Errorf("could not create missing dir %s: \n%w", *dir.Value, err)
+		}
+		logger.Info("Successfully created dir!", "dir", *dir.Value)
+	}
 	logger.Info("Successfully created all missing general config dirs!")
 	return nil
 }
 
-func createMissingModuleDirs(cfg *config.Config) error {
-	logger.Info("Creating missing module dirs...")
-
-	modules := cfg.ManagedModules
-	base := cfg.DotfilesDir
-
-	for _, module := range modules {
-		moduleDir := filepath.Join(base, module)
-
-		if _, err := os.Stat(moduleDir); os.IsNotExist(err) {
-			logger.Info("About to create dir...", "dir", moduleDir)
-
-			if err := os.MkdirAll(moduleDir, 0766); err != nil {
-				return fmt.Errorf("Could not create module dir %s: %w", moduleDir, err)
-			}
-
-			logger.Info("Successfully created dir!", "dir", moduleDir)
-		} else if err != nil {
-			return fmt.Errorf("Could not stat dir for module %s: %w", moduleDir, err)
-		}
-	}
-
-	logger.Info("Successfully created all missing module dirs!")
-	return nil
-}
-
-func createMissingModuleConfigs(cfg *config.Config) error {
-	logger.Info("Creating missing module configs...")
-
-	modules := cfg.ManagedModules
-	base := cfg.DotfilesDir
-
-	for _, module := range modules {
-		moduleConfigPath := filepath.Join(base, module, config.ModuleConfigFileName)
-
-		_, err := os.Stat(moduleConfigPath)
-
-		if os.IsNotExist(err) {
-			logger.Info("About to create file...", "file", moduleConfigPath)
-
-			if err := os.WriteFile(moduleConfigPath, config.DefaultModuleConfig, 0766); err != nil {
-				return fmt.Errorf("Could not write config file for module %s: %w", module, err)
-			}
-
-			logger.Info("Successfully created file!", "file", moduleConfigPath)
-		} else if err != nil {
-			return fmt.Errorf("Could not create config file for module %s: %w", module, err)
-		}
-	}
-
-	logger.Info("Successfully created all missing module configs!")
-	return nil
-}
-
 func createStateFile(cfg *config.Config) error {
-	logger.Info("Creating new state file...")
-
-	if err := os.MkdirAll(filepath.Join(cfg.DotfilesDir, ".cache"), 0766); err != nil {
-		return fmt.Errorf("Could not create state file: %w", err)
+	if err := os.MkdirAll(filepath.Join(cfg.DotfilesDir, ".cache"), 0755); err != nil {
+		return fmt.Errorf("could not create state file: %w", err)
 	}
 
 	if err := state.SaveState(&state.State{
 		Modules: map[string]*state.ModuleState{},
 	}); err != nil {
-		return fmt.Errorf("Could not save state: %w", err)
+		return fmt.Errorf("could not save state: %w", err)
 	}
 
 	return nil

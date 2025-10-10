@@ -40,7 +40,6 @@ func (cs ConfigSource) String() string {
 type Config struct {
 	DotfilesDir    string   `toml:"dotfiles_dir"`
 	BackupDir      string   `toml:"backup_dir"`
-	DefaultRoot    string   `toml:"default_root"`
 	ManagedModules []string `toml:"managed_modules"`
 
 	// modules are loaded based on the managed_modules field
@@ -81,7 +80,7 @@ func (p DefaultConfigPathProvider) UserConfigDir() (string, error) {
 	dir, err := os.UserConfigDir()
 
 	if err != nil {
-		return "", fmt.Errorf("Could not find user config directory: %w", err)
+		return "", fmt.Errorf("could not find user config directory: %w", err)
 	}
 
 	return dir, nil
@@ -124,14 +123,12 @@ func Load() (*Config, error) {
 }
 
 func (l *ConfigLoader) LoadConfig() (*Config, error) {
-	logger.Info("Starting configuration loading...")
-
 	cfg := &Config{}
 	cfg.modules = make(map[string]*ModuleConfig)
 
 	// Try to load embedded config
 	if _, err := toml.Decode(string(DefaultConfig), cfg); err != nil {
-		return nil, fmt.Errorf("Failed to decode embedded config: %w", err)
+		return nil, fmt.Errorf("failed to decode embedded config: %w", err)
 	} else {
 		cfg.source = Embedded
 	}
@@ -156,7 +153,7 @@ func (l *ConfigLoader) LoadConfig() (*Config, error) {
 
 	// Validate general project config
 	if err := cfg.validate(); err != nil {
-		return nil, fmt.Errorf("Invalid configuration: %w", err)
+		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
 
 	logger.Info("Successfully loaded configuration!")
@@ -164,7 +161,6 @@ func (l *ConfigLoader) LoadConfig() (*Config, error) {
 }
 
 func (l *ConfigLoader) LoadModules(cfg *Config) (*Config, error) {
-	logger.Info("Starting modules configuration loading...")
 	updatedCfg := cfg.DeepCopy()
 
 	// Load per-module configuration files
@@ -202,7 +198,7 @@ func (l *ConfigLoader) loadModuleConfigFiles(cfg *Config) error {
 
 		mCfg := &ModuleConfig{}
 		if err := readConfigFromFile(modulePath, mCfg); err != nil {
-			return fmt.Errorf("Failed to decode module config %s: %w", module, err)
+			return fmt.Errorf("failed to decode module config %s: %w", module, err)
 		}
 
 		cfg.modules[module] = mCfg
@@ -214,7 +210,7 @@ func (l *ConfigLoader) loadModuleConfigFiles(cfg *Config) error {
 func (cfg *Config) validateModules() error {
 	for moduleName, mCfg := range cfg.modules {
 		if err := mCfg.validate(); err != nil {
-			return fmt.Errorf("Invalid configuration for module '%s': %w", moduleName, err)
+			return fmt.Errorf("invalid configuration for module '%s': %w", moduleName, err)
 		}
 	}
 	return nil
@@ -229,7 +225,7 @@ func (l *ConfigLoader) resolveModuleConfigPaths(cfg *Config) error {
 			newPath, err := paths.ResolvePath(*field.Value, base)
 
 			if err != nil {
-				return fmt.Errorf("Could not resolve path fields for module %s: %w", moduleName, err)
+				return fmt.Errorf("could not resolve path fields for module %s: %w", moduleName, err)
 			}
 
 			*field.Value = newPath
@@ -245,7 +241,6 @@ func (cfg *Config) DeepCopy() *Config {
 
 	newCfg := &Config{
 		DotfilesDir:    cfg.DotfilesDir,
-		DefaultRoot:    cfg.DefaultRoot,
 		BackupDir:      cfg.BackupDir,
 		ManagedModules: append([]string{}, cfg.ManagedModules...),
 		modules:        make(map[string]*ModuleConfig),
@@ -295,7 +290,7 @@ func (l *ConfigLoader) resolveConfigPaths(cfg *Config) error {
 	base, err := l.pathProvider.UserConfigDir()
 
 	if err != nil {
-		return fmt.Errorf("Could not start resolving config's relative paths: %w", err)
+		return fmt.Errorf("could not start resolving config's relative paths: %w", err)
 	}
 
 	for _, field := range pathFields {
@@ -361,10 +356,8 @@ func (cfg *Config) validatePaths() error {
 			logger.Warn("The config field references a non-existing path",
 				"field", field.Name,
 				"path", *field.Value)
-		}
-
-		if err != nil {
-			return fmt.Errorf("The config field %s references an invalid path: %w", field.Name, err)
+		} else if err != nil {
+			return fmt.Errorf("the config field %s references an invalid path: %w", field.Name, err)
 		}
 	}
 
@@ -379,11 +372,11 @@ func (mCfg *ModuleConfig) validatePaths() error {
 
 		// Separating non-existence to optionally handle it later (via dir creation, etc.)
 		if os.IsNotExist(err) {
-			return fmt.Errorf("The module config field %s references a non-existing path: %w", field.Name, err)
+			return fmt.Errorf("the module config field %s references a non-existing path: %w", field.Name, err)
 		}
 
 		if err != nil {
-			return fmt.Errorf("The module config field %s references an invalid path: %w", field.Name, err)
+			return fmt.Errorf("the module config field %s references an invalid path: %w", field.Name, err)
 		}
 	}
 
@@ -399,7 +392,6 @@ func (cfg *Config) GetPathFields() []struct {
 		Value *string
 	}{
 		{"dotfiles_dir", &cfg.DotfilesDir},
-		{"default_root", &cfg.DefaultRoot},
 		{"backup_dir", &cfg.BackupDir},
 	}
 }
@@ -427,7 +419,7 @@ func (cfg *Config) checkModuleDependencies() error {
 		for _, dep := range mCfg.ModuleDependencies {
 			if !managedSet[dep] {
 				return fmt.Errorf(
-					"The dependency '%s' from the module '%s' is not managed by peridot or does not exist",
+					"the dependency '%s' from the module '%s' is not managed by peridot or does not exist",
 					dep,
 					moduleName)
 			}
@@ -444,7 +436,7 @@ func (cfg *Config) checkCircularModuleDependencies() error {
 	modules := cfg.modules
 	for moduleName := range modules {
 		if !visited[moduleName] && cfg.hasCycle(moduleName, visited, recursionStack) {
-			return fmt.Errorf("Detected cyclical module dependency regarding the module %s", moduleName)
+			return fmt.Errorf("detected cyclical module dependency regarding the module %s", moduleName)
 		}
 	}
 
@@ -480,27 +472,25 @@ func readConfigFromFile(path string, target any) error {
 	}
 
 	if err != nil {
-		return fmt.Errorf("Could not stat file at %s: %w", path, err)
+		return fmt.Errorf("could not stat file at %s: %w", path, err)
 	}
 
 	if _, err := toml.DecodeFile(path, target); err != nil {
-		return fmt.Errorf("Failed to decode file at %s: %w", path, err)
+		return fmt.Errorf("failed to decode file at %s: %w", path, err)
 	}
 
 	return nil
 }
 
 func writeConfigToFile(source any, path string) error {
-	logger.Info("Writing / Overwriting file...", "path", path)
-
 	var buf bytes.Buffer
 	encoder := toml.NewEncoder(&buf)
 	if err := encoder.Encode(source); err != nil {
-		return fmt.Errorf("Could not encode the given struct to toml: %w", err)
+		return fmt.Errorf("could not encode the given struct to toml: %w", err)
 	}
 
-	if err := os.WriteFile(path, buf.Bytes(), 0766); err != nil {
-		return fmt.Errorf("Could not write encoded config to file: %w", err)
+	if err := os.WriteFile(path, buf.Bytes(), 0644); err != nil {
+		return fmt.Errorf("could not write encoded config to file: %w", err)
 	}
 
 	logger.Info("Writing successful!", "path", path)
@@ -515,7 +505,7 @@ func (l *ConfigLoader) OverwriteConfig(cfg *Config) error {
 
 	path, err := l.pathProvider.UserConfigPath()
 	if err != nil {
-		return fmt.Errorf("Could not overwrite configuration: %w", err)
+		return fmt.Errorf("could not overwrite configuration: %w", err)
 	}
 
 	return writeConfigToFile(cfg, path)
