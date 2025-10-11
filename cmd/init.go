@@ -113,7 +113,7 @@ func ExecuteInit(cmdCfg *InitCommandConfig) error {
 		return err
 	}
 
-	if err := addMissingModules(cfg); err != nil {
+	if err := addMissingModules(cfg, loader); err != nil {
 		return err
 	}
 
@@ -136,12 +136,11 @@ func ExecuteInit(cmdCfg *InitCommandConfig) error {
 	return nil
 }
 
-func addMissingModules(cfg *config.Config) error {
+func addMissingModules(cfg *config.Config, loader *config.ConfigLoader) error {
 	modules := cfg.ManagedModules
-	dotfilesDir := cfg.DotfilesDir
 
 	for _, module := range modules {
-		if err := modmgr.AddModule(module, dotfilesDir); err != nil {
+		if err := modmgr.AddModule(module, cfg, loader); err != nil {
 			return err
 		}
 	}

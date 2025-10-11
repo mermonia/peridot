@@ -19,7 +19,10 @@ type AddCommandConfig struct {
 var addCommandDescription string = `
 If not already existing, creates a directory and a module config file
 for the specified <module>. By default, the module config will be
-identical to the provided default-module.toml
+identical to the provided default-module.toml.
+
+The module will be marked as managed by peridot, whether they were just
+created or already existing.
 `
 
 var AddCommand cli.Command = cli.Command{
@@ -28,14 +31,6 @@ var AddCommand cli.Command = cli.Command{
 	Usage:       "add a module to the peridot dotfiles directory",
 	ArgsUsage:   "<module>",
 	Description: addCommandDescription,
-	Flags: []cli.Flag{
-		&cli.BoolFlag{
-			Name:    "manage",
-			Aliases: []string{"m"},
-			Value:   false,
-			Usage:   "add the new module to the config's managed_modules field",
-		},
-	},
 	Arguments: []cli.Argument{
 		&cli.StringArg{
 			Name:  "moduleName",
@@ -63,15 +58,8 @@ func ExecuteAdd(cmdCfg *AddCommandConfig) error {
 		return fmt.Errorf("could not load config %w", err)
 	}
 
-	dotfilesDir := cfg.DotfilesDir
-
-	if err := modmgr.AddModule(cmdCfg.ModuleName, dotfilesDir); err != nil {
+	if err := modmgr.AddModule(cmdCfg.ModuleName, cfg, loader); err != nil {
 		return err
-	}
-
-	if cmdCfg.ManageModule && !slices.Contains(cfg.ManagedModules, cmdCfg.ModuleName) {
-		cfg.ManagedModules = append(cfg.ManagedModules, cmdCfg.ModuleName)
-		loader.OverwriteConfig(cfg)
 	}
 
 	logger.Info("Successfully executed command!", "command", "add")

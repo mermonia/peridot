@@ -4,15 +4,22 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/mermonia/peridot/config"
 	"github.com/mermonia/peridot/internal/logger"
 )
 
-func AddModule(moduleName string, dotfilesDir string) error {
-	if err := createModuleIfMissing(moduleName, dotfilesDir); err != nil {
+func AddModule(moduleName string, cfg *config.Config, loader *config.ConfigLoader) error {
+	if err := createModuleIfMissing(moduleName, cfg.DotfilesDir); err != nil {
 		return fmt.Errorf("could not add module %s: %w", moduleName, err)
 	}
+
+	if !slices.Contains(cfg.ManagedModules, moduleName) {
+		cfg.ManagedModules = append(cfg.ManagedModules, moduleName)
+		loader.OverwriteConfig(cfg)
+	}
+
 	logger.Info("Successfully added module", "module", moduleName)
 	return nil
 }
