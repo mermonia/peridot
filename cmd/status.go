@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/mermonia/peridot/config"
+	"github.com/mermonia/peridot/internal/paths"
 	"github.com/mermonia/peridot/internal/state"
 	"github.com/mermonia/peridot/internal/tree"
 	"github.com/urfave/cli/v3"
@@ -64,13 +64,7 @@ var StatusCommand cli.Command = cli.Command{
 }
 
 func ExecuteStatus() error {
-	loader := config.NewConfigLoader(config.DefaultConfigPathProvider{})
-	cfg, err := loader.LoadConfig()
-	if err != nil {
-		return fmt.Errorf("could not load config: %w", err)
-	}
-
-	st, err := state.LoadState()
+	st, err := state.LoadState(paths.GetDotfilesDir())
 	if err != nil {
 		return fmt.Errorf("could not load state: %w", err)
 	}
@@ -84,8 +78,6 @@ func ExecuteStatus() error {
 		return fmt.Errorf("could not get state file tree: %w", err)
 	}
 
-	fmt.Println("dotfiles_dir: " + cfg.DotfilesDir)
-	fmt.Println("backup_dir: " + cfg.BackupDir)
 	tree.PrintTree(tr, tree.DefaultTreeBranchSymbols, os.Stdout)
 
 	return nil

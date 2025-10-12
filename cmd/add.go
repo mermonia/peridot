@@ -3,9 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"slices"
 
-	"github.com/mermonia/peridot/config"
 	"github.com/mermonia/peridot/internal/logger"
 	"github.com/mermonia/peridot/internal/modmgr"
 	"github.com/urfave/cli/v3"
@@ -52,13 +50,7 @@ func ExecuteAdd(cmdCfg *AddCommandConfig) error {
 		return fmt.Errorf("cannot create a module with an empty name. did you set the module argument?")
 	}
 
-	loader := config.NewConfigLoader(config.DefaultConfigPathProvider{})
-	cfg, err := loader.LoadConfig()
-	if err != nil {
-		return fmt.Errorf("could not load config %w", err)
-	}
-
-	if err := modmgr.AddModule(cmdCfg.ModuleName, cfg, loader); err != nil {
+	if err := modmgr.AddModule(cmdCfg.ModuleName); err != nil {
 		return err
 	}
 

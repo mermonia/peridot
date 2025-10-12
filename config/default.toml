@@ -1,5 +1,0 @@
-dotfiles_dir = "~/.peridot/dotfiles"
-default_root = "~"
-backup_dir = "~/.peridot/dotfiles/.backups"
-
-managed_modules = []

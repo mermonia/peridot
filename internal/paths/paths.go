@@ -7,6 +7,8 @@ import (
 	"strings"
 )
 
+const DotfilesDirEnvName string = "PERIDOT_DOTFILES_DIR"
+
 func ResolvePath(path string, base string) (string, error) {
 	// Resolve leading tildes
 	if s, found := strings.CutPrefix(path, "~"); found {
@@ -31,4 +33,26 @@ func ResolvePath(path string, base string) (string, error) {
 	}
 
 	return absPath, nil
+}
+
+// Returns the directory specified by the PERIDOT_DOTFILES_DIR
+// environment variable if set to a valid path, or the current
+// directory otherwise.
+// Falls back to an empty string if getting the wd fails.
+func GetDotfilesDir() string {
+	value, envExists := os.LookupEnv(DotfilesDirEnvName)
+
+	if envExists {
+		_, err := os.Stat(value)
+		if err == nil {
+			return value
+		}
+	}
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+
+	return cwd
 }

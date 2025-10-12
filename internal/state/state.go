@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mermonia/peridot/config"
 	"github.com/mermonia/peridot/internal/hash"
 	"github.com/mermonia/peridot/internal/tree"
 )
@@ -43,15 +42,9 @@ const (
 
 var StateFilePath string = filepath.Join(".cache", "state.json")
 
-func LoadState() (*State, error) {
-	loader := config.NewConfigLoader(config.DefaultConfigPathProvider{})
-	cfg, err := loader.LoadConfig()
-	if err != nil {
-		return nil, fmt.Errorf("could not load config: %w", err)
-	}
-
+func LoadState(dotfilesDir string) (*State, error) {
 	state := &State{}
-	stateFile, err := os.ReadFile(filepath.Join(cfg.DotfilesDir, StateFilePath))
+	stateFile, err := os.ReadFile(filepath.Join(dotfilesDir, StateFilePath))
 	if err != nil {
 		return nil, fmt.Errorf("could not read state file: %w", err)
 	}
@@ -63,19 +56,13 @@ func LoadState() (*State, error) {
 	return state, nil
 }
 
-func SaveState(state *State) error {
-	loader := config.NewConfigLoader(config.DefaultConfigPathProvider{})
-	cfg, err := loader.LoadConfig()
-	if err != nil {
-		return fmt.Errorf("could not load config: %w", err)
-	}
-
+func SaveState(state *State, dotfilesDir string) error {
 	stateFile, err := json.Marshal(state)
 	if err != nil {
 		return fmt.Errorf("could not encode json state: %w", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(cfg.DotfilesDir, StateFilePath), stateFile, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dotfilesDir, StateFilePath), stateFile, 0644); err != nil {
 		return fmt.Errorf("could not write state file: %w", err)
 	}
 

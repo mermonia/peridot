@@ -4,20 +4,34 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 
-	"github.com/mermonia/peridot/config"
 	"github.com/mermonia/peridot/internal/logger"
+	"github.com/mermonia/peridot/internal/module"
+	"github.com/mermonia/peridot/internal/paths"
+	"github.com/mermonia/peridot/internal/state"
 )
 
-func AddModule(moduleName string, cfg *config.Config, loader *config.ConfigLoader) error {
-	if err := createModuleIfMissing(moduleName, cfg.DotfilesDir); err != nil {
+func AddModule(moduleName string) error {
+	dotfilesDir := paths.GetDotfilesDir()
+
+	if err := createModuleIfMissing(moduleName, dotfilesDir); err != nil {
 		return fmt.Errorf("could not add module %s: %w", moduleName, err)
 	}
 
-	if !slices.Contains(cfg.ManagedModules, moduleName) {
-		cfg.ManagedModules = append(cfg.ManagedModules, moduleName)
-		loader.OverwriteConfig(cfg)
+	st, err := state.LoadState(dotfilesDir)
+	if err != nil {
+		return fmt.Errorf("could not load state: %w", err)
+	}
+
+	if st.Modules[moduleName] == nil {
+		st.Modules[moduleName] = &state.ModuleState{
+			Status: state.NotDeployed,
+			Files:  make(map[string]*state.Entry),
+		}
+	}
+
+	if err := state.SaveState(st, dotfilesDir); err != nil {
+		return fmt.Errorf("could not save state: %w", err)
 	}
 
 	logger.Info("Successfully added module", "module", moduleName)
@@ -26,7 +40,7 @@ func AddModule(moduleName string, cfg *config.Config, loader *config.ConfigLoade
 
 func createModuleIfMissing(moduleName string, dotfilesDir string) error {
 	moduleDir := filepath.Join(dotfilesDir, moduleName)
-	moduleConfigPath := filepath.Join(moduleDir, config.ModuleConfigFileName)
+	moduleConfigPath := filepath.Join(moduleDir, module.ConfigFileName)
 
 	if err := os.MkdirAll(moduleDir, 0755); err != nil {
 		return fmt.Errorf("could not create directory %s: %w", moduleDir, err)
@@ -38,7 +52,7 @@ func createModuleIfMissing(moduleName string, dotfilesDir string) error {
 		return fmt.Errorf("could not stat config file %s: %w", moduleConfigPath, err)
 	}
 
-	if err := os.WriteFile(moduleConfigPath, config.DefaultModuleConfig, 0644); err != nil {
+	if err := os.WriteFile(moduleConfigPath, module.DefaultConfig, 0644); err != nil {
 		return fmt.Errorf("could not create config file %s: %w", moduleConfigPath, err)
 	}
 

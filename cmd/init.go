@@ -6,9 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/mermonia/peridot/config"
 	"github.com/mermonia/peridot/internal/logger"
-	"github.com/mermonia/peridot/internal/modmgr"
 	"github.com/mermonia/peridot/internal/paths"
 	"github.com/mermonia/peridot/internal/state"
 	"github.com/urfave/cli/v3"
@@ -19,13 +17,17 @@ type InitCommandConfig struct {
 	Persist bool
 }
 
-var initCommandDescription string = `
-If not already existing, creates the directory specified in the
-"dotfiles_dir" field of the peridot config, along with directories
-and config files for all modules specified in the "managed_modules"
-field.
-A '.cache/' directory will be created inside the dotfiles_dir, and
-it will be populated by an empty state file 'state.json'
+const initCommandDescription string = `
+If not already, initializes a directory as a peridot dotfiles dir.
+The directory to be initialized can be specified via flags (such as
+--dir, --here) or the PERIDOT_DOTFILES_DIR environment variable.
+
+If none of those flags are set and the environment variable is not set
+or set to an invalid path, peridot will issue a warning and initialize
+the current directory.
+
+Initializing a directory essentially means ensuring the .cache/state.json
+file exists.
 `
 
 var InitCommand cli.Command = cli.Command{
@@ -33,14 +35,6 @@ var InitCommand cli.Command = cli.Command{
 	Aliases:     []string{"i"},
 	Usage:       "initialize dotfiles dir",
 	Description: initCommandDescription,
-	Flags: []cli.Flag{
-		&cli.BoolFlag{
-			Name:    "persist",
-			Aliases: []string{"p"},
-			Value:   false,
-			Usage:   "overwrite the user config when setting a new dotfiles dir",
-		},
-	},
 	MutuallyExclusiveFlags: []cli.MutuallyExclusiveFlags{
 		{
 			Required: false,
@@ -71,23 +65,20 @@ var InitCommand cli.Command = cli.Command{
 		}
 
 		var initDir string
-		// Infer initDir from the flags. Even though some flags technically override
-		// others, they are mutually exclusive. The code's priority order should be
-		// ignored in practice.
 		if c.Bool("here") {
 			initDir = cwd
-		}
-		if c.String("dir") != "" {
+		} else if c.String("dir") != "" {
 			initDir, err = paths.ResolvePath(c.String("dir"), cwd)
 
 			if err != nil {
-				return fmt.Errorf("could not initialize dir scpecified by the --dir flag: %w", err)
+				return fmt.Errorf("could not resolve path specified by the --dir flag: %w", err)
 			}
+		} else {
+			initDir = paths.GetDotfilesDir()
 		}
 
 		cmdCfg := &InitCommandConfig{
 			InitDir: initDir,
-			Persist: c.Bool("persist"),
 		}
 
 		return ExecuteInit(cmdCfg)
@@ -95,79 +86,24 @@ var InitCommand cli.Command = cli.Command{
 }
 
 func ExecuteInit(cmdCfg *InitCommandConfig) error {
-	loader := config.NewConfigLoader(config.DefaultConfigPathProvider{})
+	dotfilesDir := cmdCfg.InitDir
 
-	// Load general configuration
-	cfg, err := loader.LoadConfig()
-	if err != nil {
-		return err
-	}
-
-	// Flags override config files
-	if cmdCfg.InitDir != "" {
-		cfg.DotfilesDir = cmdCfg.InitDir
-	}
-
-	// Missing dirs / files creation
-	if err := createMissingDirs(cfg); err != nil {
-		return err
-	}
-
-	if err := addMissingModules(cfg, loader); err != nil {
-		return err
-	}
-
-	if err := createStateFile(cfg); err != nil {
-		return err
-	}
-
-	// Module loading (module config existence is needed)
-	cfg, err = loader.LoadModules(cfg)
-	if err != nil {
-		return err
-	}
-
-	// Write to config file,
-	if cmdCfg.Persist && cmdCfg.InitDir != "" {
-		loader.OverwriteConfig(cfg)
+	if err := createStateFile(dotfilesDir); err != nil {
+		return fmt.Errorf("could not create state file: %w", err)
 	}
 
 	logger.Info("Successfully executed command!", "command", "init")
 	return nil
 }
 
-func addMissingModules(cfg *config.Config, loader *config.ConfigLoader) error {
-	modules := cfg.ManagedModules
-
-	for _, module := range modules {
-		if err := modmgr.AddModule(module, cfg, loader); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func createMissingDirs(cfg *config.Config) error {
-	possibleDirs := cfg.GetPathFields()
-	for _, dir := range possibleDirs {
-		if err := os.MkdirAll(*dir.Value, 0755); err != nil {
-			return fmt.Errorf("could not create missing dir %s: \n%w", *dir.Value, err)
-		}
-		logger.Info("Successfully created dir!", "dir", *dir.Value)
-	}
-	logger.Info("Successfully created all missing general config dirs!")
-	return nil
-}
-
-func createStateFile(cfg *config.Config) error {
-	if err := os.MkdirAll(filepath.Join(cfg.DotfilesDir, ".cache"), 0755); err != nil {
+func createStateFile(dotfilesDir string) error {
+	if err := os.MkdirAll(filepath.Join(dotfilesDir, ".cache"), 0755); err != nil {
 		return fmt.Errorf("could not create state file: %w", err)
 	}
 
 	if err := state.SaveState(&state.State{
 		Modules: map[string]*state.ModuleState{},
-	}); err != nil {
+	}, dotfilesDir); err != nil {
 		return fmt.Errorf("could not save state: %w", err)
 	}
 
