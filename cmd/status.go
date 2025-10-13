@@ -64,7 +64,7 @@ var StatusCommand cli.Command = cli.Command{
 }
 
 func ExecuteStatus() error {
-	st, err := state.LoadState(paths.GetDotfilesDir())
+	st, err := state.LoadState(paths.DotfilesDir())
 	if err != nil {
 		return fmt.Errorf("could not load state: %w", err)
 	}

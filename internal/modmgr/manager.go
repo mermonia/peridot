@@ -12,7 +12,7 @@ import (
 )
 
 func AddModule(moduleName string) error {
-	dotfilesDir := paths.GetDotfilesDir()
+	dotfilesDir := paths.DotfilesDir()
 
 	if err := createModuleIfMissing(moduleName, dotfilesDir); err != nil {
 		return fmt.Errorf("could not add module %s: %w", moduleName, err)

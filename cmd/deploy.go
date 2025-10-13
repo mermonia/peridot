@@ -30,10 +30,10 @@ files. Even if templating was explicitly disables, the symlinks will
 still point to these intermediate files, although their content will
 be identical to those in the module dir.
 
-All intermediate files are stored in the "DOTFILES_DIR/.cache" directory,
+All intermediate files are stored in the "DOTFILES_DIR/.peridot" directory,
 whose structure mimics that of the DOTFILES_DIR itself. For example,
 deploying a file stored as "DOTFILES_DIR/kitty/.config/kitty/kitty.conf":
-	- Creates an intermediate file: "DOTFILES_DIR/.cache/kitty/.config/kitty/kitty.conf"
+	- Creates an intermediate file: "DOTFILES_DIR/.peridot/kitty/.config/kitty/kitty.conf"
 	- Creates a symlink pointing to the intermediate file at ROOT/.config/kitty/kitty.conf
 `
 

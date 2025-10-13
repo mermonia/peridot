@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/mermonia/peridot/internal/hash"
+	"github.com/mermonia/peridot/internal/paths"
 	"github.com/mermonia/peridot/internal/tree"
 )
 
@@ -40,11 +41,9 @@ const (
 	Synced
 )
 
-var StateFilePath string = filepath.Join(".cache", "state.json")
-
 func LoadState(dotfilesDir string) (*State, error) {
 	state := &State{}
-	stateFile, err := os.ReadFile(filepath.Join(dotfilesDir, StateFilePath))
+	stateFile, err := os.ReadFile(paths.StateFilePath())
 	if err != nil {
 		return nil, fmt.Errorf("could not read state file: %w", err)
 	}
@@ -62,7 +61,7 @@ func SaveState(state *State, dotfilesDir string) error {
 		return fmt.Errorf("could not encode json state: %w", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(dotfilesDir, StateFilePath), stateFile, 0644); err != nil {
+	if err := os.WriteFile(paths.StateFilePath(), stateFile, 0644); err != nil {
 		return fmt.Errorf("could not write state file: %w", err)
 	}
 

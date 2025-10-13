@@ -7,7 +7,11 @@ import (
 	"strings"
 )
 
-const DotfilesDirEnvName string = "PERIDOT_DOTFILES_DIR"
+const (
+	DotfilesDirEnvName = "PERIDOT_DOTFILES_DIR"
+	PeridotDirName     = ".peridot"
+	StateFileName      = "state.json"
+)
 
 func ResolvePath(path string, base string) (string, error) {
 	// Resolve leading tildes
@@ -35,11 +39,11 @@ func ResolvePath(path string, base string) (string, error) {
 	return absPath, nil
 }
 
-// Returns the directory specified by the PERIDOT_DOTFILES_DIR
-// environment variable if set to a valid path, or the current
-// directory otherwise.
-// Falls back to an empty string if getting the wd fails.
-func GetDotfilesDir() string {
+// DotfilesDir returns the directory specified by the PERIDOT_DOTFILES_DIR
+// environment variable. If not set, it searches upward for a .peridot directory
+// containing state.json, starting from the current directory.
+// Falls back to the current working directory if none is found.
+func DotfilesDir() string {
 	value, envExists := os.LookupEnv(DotfilesDirEnvName)
 
 	if envExists {
@@ -54,5 +58,28 @@ func GetDotfilesDir() string {
 		return ""
 	}
 
+	if dir, err := findPeridotDir(cwd); err == nil {
+		return dir
+	}
+
 	return cwd
+}
+
+func findPeridotDir(start string) (string, error) {
+	for dir := start; dir != filepath.Dir(dir); dir = filepath.Dir(dir) {
+		candidate := filepath.Join(dir, PeridotDirName, StateFileName)
+		if _, err := os.Stat(candidate); err == nil {
+			return dir, nil
+		}
+	}
+
+	return "", fmt.Errorf("no peridot directory found")
+}
+
+func PeridotDir() string {
+	return filepath.Join(DotfilesDir(), PeridotDirName)
+}
+
+func StateFilePath() string {
+	return filepath.Join(PeridotDir(), StateFileName)
 }

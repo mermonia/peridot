@@ -26,7 +26,7 @@ If none of those flags are set and the environment variable is not set
 or set to an invalid path, peridot will issue a warning and initialize
 the current directory.
 
-Initializing a directory essentially means ensuring the .cache/state.json
+Initializing a directory essentially means ensuring the .peridot/state.json
 file exists.
 `
 
@@ -74,7 +74,7 @@ var InitCommand cli.Command = cli.Command{
 				return fmt.Errorf("could not resolve path specified by the --dir flag: %w", err)
 			}
 		} else {
-			initDir = paths.GetDotfilesDir()
+			initDir = paths.DotfilesDir()
 		}
 
 		cmdCfg := &InitCommandConfig{
@@ -97,7 +97,7 @@ func ExecuteInit(cmdCfg *InitCommandConfig) error {
 }
 
 func createStateFile(dotfilesDir string) error {
-	if err := os.MkdirAll(filepath.Join(dotfilesDir, ".cache"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(dotfilesDir, paths.PeridotDirName), 0755); err != nil {
 		return fmt.Errorf("could not create state file: %w", err)
 	}
 
@@ -106,6 +106,5 @@ func createStateFile(dotfilesDir string) error {
 	}, dotfilesDir); err != nil {
 		return fmt.Errorf("could not save state: %w", err)
 	}
-
 	return nil
 }
