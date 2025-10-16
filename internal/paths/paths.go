@@ -8,9 +8,11 @@ import (
 )
 
 const (
-	DotfilesDirEnvName = "PERIDOT_DOTFILES_DIR"
-	PeridotDirName     = ".peridot"
-	StateFileName      = "state.json"
+	DotfilesDirEnvName   = "PERIDOT_DOTFILES_DIR"
+	PeridotDirName       = ".peridot"
+	StateFileName        = "state.json"
+	ModuleConfigFileName = "module.toml"
+	DotreplacePrefix     = "dot-"
 )
 
 func ResolvePath(path string, base string) (string, error) {
@@ -58,14 +60,14 @@ func DotfilesDir() string {
 		return ""
 	}
 
-	if dir, err := findPeridotDir(cwd); err == nil {
+	if dir, err := findDotfilesDir(cwd); err == nil {
 		return dir
 	}
 
 	return cwd
 }
 
-func findPeridotDir(start string) (string, error) {
+func findDotfilesDir(start string) (string, error) {
 	for dir := start; dir != filepath.Dir(dir); dir = filepath.Dir(dir) {
 		candidate := filepath.Join(dir, PeridotDirName, StateFileName)
 		if _, err := os.Stat(candidate); err == nil {
@@ -76,10 +78,63 @@ func findPeridotDir(start string) (string, error) {
 	return "", fmt.Errorf("no peridot directory found")
 }
 
-func PeridotDir() string {
-	return filepath.Join(DotfilesDir(), PeridotDirName)
+func PeridotDir(dotfilesDir string) string {
+	return filepath.Join(dotfilesDir, PeridotDirName)
 }
 
-func StateFilePath() string {
-	return filepath.Join(PeridotDir(), StateFileName)
+func StateFilePath(dotfilesDir string) string {
+	return filepath.Join(PeridotDir(dotfilesDir), StateFileName)
+}
+
+func GetDotreplacedPath(path string) string {
+	dir, file := filepath.Split(path)
+	if cutFile, hasPrefix := strings.CutPrefix(file, DotreplacePrefix); hasPrefix {
+		file = "." + cutFile
+	}
+
+	return filepath.Join(dir, file)
+}
+
+func RenderedFilePath(path string, dotfilesDir string) (string, error) {
+	rel, err := filepath.Rel(dotfilesDir, path)
+	if err != nil {
+		return "", fmt.Errorf("could not relativize path: %w", err)
+	}
+
+	return filepath.Join(PeridotDir(dotfilesDir), rel), nil
+}
+
+func SymlinkPath(path, dotfilesDir, moduleName, root string) (string, error) {
+	rel, err := filepath.Rel(ModuleDir(dotfilesDir, moduleName), path)
+	if err != nil {
+		return "", fmt.Errorf("could not relativize path: %w", err)
+	}
+
+	return filepath.Join(root, rel), nil
+}
+
+func ModuleDir(dotfilesDir, moduleName string) string {
+	return filepath.Join(dotfilesDir, moduleName)
+}
+
+func SplitPath(path string) []string {
+	path = filepath.Clean(path)
+	var parts []string
+
+	for {
+		dir, file := filepath.Split(path)
+		if file != "" {
+			parts = append([]string{file}, parts...)
+		}
+
+		if dir == "" || dir == path {
+			if dir != "" {
+				parts = append([]string{dir}, parts...)
+			}
+			break
+		}
+		path = dir[:len(dir)-1]
+	}
+
+	return parts
 }

@@ -5,22 +5,26 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/mermonia/peridot/internal/appcontext"
 	"github.com/mermonia/peridot/internal/logger"
 	"github.com/mermonia/peridot/internal/module"
-	"github.com/mermonia/peridot/internal/paths"
 	"github.com/mermonia/peridot/internal/state"
 )
 
-func AddModule(moduleName string) error {
-	dotfilesDir := paths.DotfilesDir()
+func AddModule(moduleName string, appCtx *appcontext.Context) error {
+	dotfilesDir := appCtx.DotfilesDir
 
 	if err := createModuleIfMissing(moduleName, dotfilesDir); err != nil {
 		return fmt.Errorf("could not add module %s: %w", moduleName, err)
 	}
 
-	st, err := state.LoadState(dotfilesDir)
+	st, err := state.LoadState(appCtx.DotfilesDir)
 	if err != nil {
 		return fmt.Errorf("could not load state: %w", err)
+	}
+
+	if err := st.Refresh(appCtx.DotfilesDir); err != nil {
+		return fmt.Errorf("could not refresh state: %w", err)
 	}
 
 	if st.Modules[moduleName] == nil {
@@ -30,7 +34,7 @@ func AddModule(moduleName string) error {
 		}
 	}
 
-	if err := state.SaveState(st, dotfilesDir); err != nil {
+	if err := state.SaveState(st, appCtx.DotfilesDir); err != nil {
 		return fmt.Errorf("could not save state: %w", err)
 	}
 

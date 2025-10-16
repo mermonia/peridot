@@ -13,7 +13,7 @@ const ConfigFileName string = "module.toml"
 
 func LoadConfig(dotfilesDir, moduleName string) (*Config, error) {
 	moduleDir := filepath.Join(dotfilesDir, moduleName)
-	path := filepath.Join(moduleDir, moduleName)
+	path := filepath.Join(moduleDir, paths.ModuleConfigFileName)
 
 	c := &Config{}
 	if _, err := toml.DecodeFile(path, c); err != nil {
@@ -22,6 +22,10 @@ func LoadConfig(dotfilesDir, moduleName string) (*Config, error) {
 
 	if err := c.resolvePaths(moduleDir); err != nil {
 		return nil, fmt.Errorf("could not resolve paths for module %s: %w", moduleName, err)
+	}
+
+	if err := c.validate(); err != nil {
+		return nil, fmt.Errorf("module %s has an invalid configuration: %w", moduleName, err)
 	}
 
 	return c, nil

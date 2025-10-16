@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/mermonia/peridot/internal/appcontext"
 	"github.com/mermonia/peridot/internal/logger"
 	"github.com/mermonia/peridot/internal/modmgr"
 	"github.com/urfave/cli/v3"
@@ -36,21 +37,22 @@ var AddCommand cli.Command = cli.Command{
 		},
 	},
 	Action: func(ctx context.Context, c *cli.Command) error {
+		appCtx := appcontext.New()
 		cmdCfg := &AddCommandConfig{
 			ManageModule: c.Bool("manage"),
 			ModuleName:   c.StringArg("moduleName"),
 		}
 
-		return ExecuteAdd(cmdCfg)
+		return ExecuteAdd(cmdCfg, appCtx)
 	},
 }
 
-func ExecuteAdd(cmdCfg *AddCommandConfig) error {
+func ExecuteAdd(cmdCfg *AddCommandConfig, appCtx *appcontext.Context) error {
 	if cmdCfg.ModuleName == "" {
 		return fmt.Errorf("cannot create a module with an empty name. did you set the module argument?")
 	}
 
-	if err := modmgr.AddModule(cmdCfg.ModuleName); err != nil {
+	if err := modmgr.AddModule(cmdCfg.ModuleName, appCtx); err != nil {
 		return err
 	}
 

@@ -73,8 +73,10 @@ var InitCommand cli.Command = cli.Command{
 			if err != nil {
 				return fmt.Errorf("could not resolve path specified by the --dir flag: %w", err)
 			}
+		} else if val, exists := os.LookupEnv(paths.DotfilesDirEnvName); exists {
+			initDir = val
 		} else {
-			initDir = paths.DotfilesDir()
+			initDir = cwd
 		}
 
 		cmdCfg := &InitCommandConfig{

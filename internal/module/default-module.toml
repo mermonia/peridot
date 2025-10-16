@@ -17,7 +17,7 @@ module_dependencies = []
 [conditions]
 os = ""
 hostname = ""
-env_exists = ""
+env_exists = []
 
 
 # Commands to run during deployment or removal of a module.

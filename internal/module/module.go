@@ -82,6 +82,10 @@ func (m *Module) CheckBinaryDependencies() error {
 }
 
 func binaryExists(bin string) bool {
+	if bin == "" {
+		return true
+	}
+
 	_, err := exec.LookPath(bin)
 	return err == nil
 }
@@ -90,7 +94,7 @@ func (m *Module) CheckModuleDependencies(appState *state.State) error {
 	missing := []string{}
 
 	for _, dep := range m.Config.ModuleDependencies {
-		if appState.Modules[dep] == nil {
+		if dep != "" && appState.Modules[dep] == nil {
 			missing = append(missing, dep)
 		}
 	}
@@ -105,15 +109,25 @@ func (m *Module) CheckModuleDependencies(appState *state.State) error {
 
 func (m *Module) CheckConditions() error {
 	requiredOs := strings.ToLower(m.Config.Conditions.OperatingSystem)
-	if requiredOs != runtime.GOOS {
+	if requiredOs != "" && requiredOs != runtime.GOOS {
 		return fmt.Errorf("module %s requires os to be %s", m.Name, requiredOs)
 	}
 
 	for _, envvar := range m.Config.Conditions.EnvRequired {
-		if _, exists := os.LookupEnv(envvar); !exists {
+		if _, exists := os.LookupEnv(envvar); envvar != "" && !exists {
 			return fmt.Errorf("module %s requires environment variable %s to be set", m.Name, envvar)
 		}
 	}
 
 	return nil
+}
+
+func (m *Module) IsSymlinkManaged(path string) bool {
+	for _, entry := range m.State.Files {
+		if entry.SymlinkPath == path {
+			return true
+		}
+	}
+
+	return false
 }
