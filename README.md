@@ -1,6 +1,6 @@
 # Peridot
 
-Peridot is a lightweigh, modular dotfiles manager written in Go. It helps you organize, deploy and check the status of your dotfiles using a simple module-based system.
+Peridot is a lightweight, modular dotfiles manager written in Go. It helps you organize, deploy and check the status of your dotfiles using a simple module-based system.
 
 ---
 
@@ -99,9 +99,13 @@ foo@bar:~/myDotfiles$ peridot status
 └── ○ hyprland - not deployed
 ```
 
+---
+
 ## Configuration
 
 Each module's behavior can be customized by editing the **module.toml** file inside each module directory. This file is automatically created when adding a module.
+
+---
 
 ## License
 
