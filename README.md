@@ -99,10 +99,10 @@ foo@bar:~/myDotfiles$ peridot status
 └── ○ hyprland - not deployed
 ```
 
-### Configuration
+## Configuration
 
 Each module's behavior can be customized by editing the **module.toml** file inside each module directory. This file is automatically created when adding a module.
 
-### License
+## License
 
-[MIT](https://chooesalicense.com/licenses/mit/)
+[MIT](https://choosealicense.com/licenses/mit/)
