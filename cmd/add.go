@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 
 	"github.com/mermonia/peridot/internal/appcontext"
 	"github.com/mermonia/peridot/internal/logger"
@@ -63,7 +64,7 @@ var AddCommand cli.Command = cli.Command{
 	Action: func(ctx context.Context, c *cli.Command) error {
 		appCtx := appcontext.New()
 		cmdCfg := &AddCommandConfig{
-			ModuleName: c.StringArg("moduleName"),
+			ModuleName: filepath.Clean(c.StringArg("moduleName")),
 			Verbose:    c.Bool("verbose"),
 			Quiet:      c.Bool("quiet"),
 		}

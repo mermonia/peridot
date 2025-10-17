@@ -143,7 +143,7 @@ var DeployCommand cli.Command = cli.Command{
 			Adopt:      c.Bool("adopt"),
 			Dotreplace: c.Bool("dotreplace"),
 			Root:       c.String("root"),
-			ModuleName: c.StringArg("moduleName"),
+			ModuleName: filepath.Clean(c.StringArg("moduleName")),
 			Verbose:    c.Bool("verbose"),
 			Quiet:      c.Bool("quiet"),
 		}
@@ -323,9 +323,108 @@ func createSymlink(symlinkPath, targetPath string) error {
 
 	return nil
 }
-
-// TODO: Implement simulation
 func simulateDeployment(dotfilesDir string, mod *module.Module, files []string, cmdCfg *DeployCommandConfig) error {
+	fmt.Println("\n=== SIMULATION MODE ===")
+	fmt.Println("No changes will be made to the filesystem")
 
+	if mod.Config.Hooks.PreDeploy != "" {
+		fmt.Printf("Execute pre-deploy hook: %s\n", mod.Config.Hooks.PreDeploy)
+	}
+
+	root := mod.Config.Root
+	if cmdCfg.Root != "" {
+		root = cmdCfg.Root
+		fmt.Printf("Using custom root: %s\n", root)
+	}
+
+	fmt.Printf("Analyzing %d files to deploy\n\n", len(files))
+
+	var actions, warnings, errors []string
+
+	for _, path := range files {
+		if cmdCfg.Dotreplace {
+			path = paths.GetDotreplacedPath(path)
+		}
+
+		renderedFilePath, err := paths.RenderedFilePath(path, dotfilesDir)
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("Could not get rendered file path for %s: %v", path, err))
+			continue
+		}
+
+		symlinkPath, err := paths.SymlinkPath(path, dotfilesDir, mod.Name, root)
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("Could not get symlink path for %s: %v", path, err))
+			continue
+		}
+
+		info, err := os.Lstat(symlinkPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				actions = append(actions, fmt.Sprintf("CREATE: %s -> %s", symlinkPath, renderedFilePath))
+			} else {
+				warnings = append(warnings, fmt.Sprintf("Could not stat %s: %v", symlinkPath, err))
+			}
+			continue
+		}
+
+		if info.Mode()&os.ModeSymlink == 0 {
+			switch {
+			case cmdCfg.Adopt:
+				actions = append(actions, fmt.Sprintf("ADOPT: %s (copy to module, then symlink)", symlinkPath))
+			case cmdCfg.Overwrite:
+				actions = append(actions, fmt.Sprintf("OVERWRITE: %s (remove, then symlink)", symlinkPath))
+			default:
+				errors = append(errors, fmt.Sprintf("Non-symlink exists at %s (use --adopt or --overwrite)", symlinkPath))
+			}
+		} else {
+			if mod.IsSymlinkManaged(symlinkPath) {
+				actions = append(actions, fmt.Sprintf("UPDATE: %s -> %s", symlinkPath, renderedFilePath))
+			} else {
+				errors = append(errors, fmt.Sprintf("Unmanaged symlink exists at %s", symlinkPath))
+			}
+		}
+	}
+
+	printSimulationSummary(actions, warnings, errors, mod)
+
+	if len(errors) > 0 {
+		return fmt.Errorf("simulation found %d error(s) that would prevent deployment", len(errors))
+	}
+
+	fmt.Println("=== END SIMULATION ===")
+	fmt.Println("Run without --simulate to apply these changes")
 	return nil
+}
+
+func printSimulationSummary(actions, warnings, errors []string, mod *module.Module) {
+	fmt.Println("=== SIMULATION SUMMARY ===")
+
+	if len(actions) > 0 {
+		fmt.Printf("Actions that would be performed (%d):\n", len(actions))
+		for _, a := range actions {
+			fmt.Printf("  %s\n", a)
+		}
+		fmt.Println()
+	}
+
+	if len(warnings) > 0 {
+		fmt.Printf("Warnings (%d):\n", len(warnings))
+		for _, w := range warnings {
+			fmt.Printf("  ⚠  %s\n", w)
+		}
+		fmt.Println()
+	}
+
+	if len(errors) > 0 {
+		fmt.Printf("Errors that would prevent deployment (%d):\n", len(errors))
+		for _, e := range errors {
+			fmt.Printf("  ✗ %s\n", e)
+		}
+		fmt.Println()
+	}
+
+	if mod.Config.Hooks.PostDeploy != "" {
+		fmt.Printf("Execute post-deploy hook: %s\n", mod.Config.Hooks.PostDeploy)
+	}
 }
