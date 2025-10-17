@@ -14,7 +14,8 @@ import (
 
 type InitCommandConfig struct {
 	InitDir string
-	Persist bool
+	Verbose bool
+	Quiet   bool
 }
 
 const initCommandDescription string = `
@@ -57,6 +58,27 @@ var InitCommand cli.Command = cli.Command{
 				},
 			},
 		},
+		{
+			Required: false,
+			Flags: [][]cli.Flag{
+				{
+					&cli.BoolFlag{
+						Name:    "verbose",
+						Aliases: []string{"v"},
+						Value:   false,
+						Usage:   "show verbose debug info",
+					},
+				},
+				{
+					&cli.BoolFlag{
+						Name:    "quiet",
+						Aliases: []string{"q"},
+						Value:   false,
+						Usage:   "supress most logging output",
+					},
+				},
+			},
+		},
 	},
 	Action: func(ctx context.Context, c *cli.Command) error {
 		cwd, err := os.Getwd()
@@ -81,6 +103,8 @@ var InitCommand cli.Command = cli.Command{
 
 		cmdCfg := &InitCommandConfig{
 			InitDir: initDir,
+			Verbose: c.Bool("verbose"),
+			Quiet:   c.Bool("quiet"),
 		}
 
 		return ExecuteInit(cmdCfg)
@@ -89,6 +113,13 @@ var InitCommand cli.Command = cli.Command{
 
 func ExecuteInit(cmdCfg *InitCommandConfig) error {
 	dotfilesDir := cmdCfg.InitDir
+
+	if err := logger.InitFileLogging(dotfilesDir); err != nil {
+		return fmt.Errorf("could not init file logging: %w", err)
+	}
+	defer logger.CloseDefaultLogFile()
+	logger.SetVerboseMode(cmdCfg.Verbose)
+	logger.SetQuietMode(cmdCfg.Quiet)
 
 	if err := createStateFile(dotfilesDir); err != nil {
 		return fmt.Errorf("could not create state file: %w", err)

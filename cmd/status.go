@@ -6,12 +6,15 @@ import (
 	"os"
 
 	"github.com/mermonia/peridot/internal/appcontext"
+	"github.com/mermonia/peridot/internal/logger"
 	"github.com/mermonia/peridot/internal/state"
 	"github.com/mermonia/peridot/internal/tree"
 	"github.com/urfave/cli/v3"
 )
 
 type StatusCommandConfig struct {
+	Verbose bool
+	Quiet   bool
 }
 
 var statusCommandDescription string = `
@@ -52,13 +55,49 @@ var StatusCommand cli.Command = cli.Command{
 	Aliases:     []string{"s"},
 	Usage:       "display the current state of the dotfiles dir",
 	Description: statusCommandDescription,
+	MutuallyExclusiveFlags: []cli.MutuallyExclusiveFlags{
+		{
+			Required: false,
+			Flags: [][]cli.Flag{
+				{
+					&cli.BoolFlag{
+						Name:    "verbose",
+						Aliases: []string{"v"},
+						Value:   false,
+						Usage:   "show verbose debug info",
+					},
+				},
+				{
+					&cli.BoolFlag{
+						Name:    "quiet",
+						Aliases: []string{"q"},
+						Value:   false,
+						Usage:   "supress most logging output",
+					},
+				},
+			},
+		},
+	},
+
 	Action: func(ctx context.Context, c *cli.Command) error {
 		appCtx := appcontext.New()
-		return ExecuteStatus(appCtx)
+
+		cmdCfg := &StatusCommandConfig{
+			Verbose: c.Bool("verbose"),
+			Quiet:   c.Bool("quiet"),
+		}
+		return ExecuteStatus(appCtx, cmdCfg)
 	},
 }
 
-func ExecuteStatus(appCtx *appcontext.Context) error {
+func ExecuteStatus(appCtx *appcontext.Context, cmdCfg *StatusCommandConfig) error {
+	if err := logger.InitFileLogging(appCtx.DotfilesDir); err != nil {
+		return fmt.Errorf("could not init file logging: %w", err)
+	}
+	defer logger.CloseDefaultLogFile()
+	logger.SetVerboseMode(cmdCfg.Verbose)
+	logger.SetQuietMode(cmdCfg.Quiet)
+
 	st, err := state.LoadState(appCtx.DotfilesDir)
 	if err != nil {
 		return fmt.Errorf("could not load state: %w", err)
@@ -79,5 +118,6 @@ func ExecuteStatus(appCtx *appcontext.Context) error {
 		return fmt.Errorf("could not save state: %w", err)
 	}
 
+	logger.Info("Successfully executed command!", "command", "status")
 	return nil
 }

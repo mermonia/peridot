@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/mermonia/peridot/internal/hash"
-	"github.com/mermonia/peridot/internal/logger"
 	"github.com/mermonia/peridot/internal/paths"
 	"github.com/mermonia/peridot/internal/tree"
 )
@@ -109,7 +108,6 @@ func GetModuleFileTree(name string, module *ModuleState, dotfilesDir string) (*t
 			if node == nil {
 				lastNode, err = lastNode.AddValue(dir)
 				if err != nil {
-					logger.Debug("HERE1")
 					return nil, err
 				}
 			} else {

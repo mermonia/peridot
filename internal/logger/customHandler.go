@@ -51,7 +51,7 @@ func (h *CustomHandler) Enabled(ctx context.Context, level slog.Level) bool {
 }
 
 func (h *CustomHandler) Handle(ctx context.Context, r slog.Record) error {
-	buf := make([]byte, 1024)
+	buf := make([]byte, 0, 1024)
 
 	// [TIME]
 	if !r.Time.IsZero() {

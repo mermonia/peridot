@@ -84,6 +84,7 @@ func RemoveModule(moduleName string, appCtx *appcontext.Context) error {
 		return fmt.Errorf("could not save state: %w", err)
 	}
 
+	logger.Info("Successfully removed module", "module", moduleName)
 	return nil
 }
 

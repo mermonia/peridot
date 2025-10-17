@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-
-	"github.com/mermonia/peridot/internal/logger"
 )
 
 type Node struct {
@@ -148,6 +146,5 @@ func (r *Node) GetNodeByValueBFS(value string, maxDepth int) *Node {
 		}
 	}
 
-	logger.Debug("Did not find node!", "value", value)
 	return nil
 }

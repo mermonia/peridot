@@ -11,6 +11,7 @@ import (
 
 	"github.com/mermonia/peridot/internal/appcontext"
 	"github.com/mermonia/peridot/internal/hash"
+	"github.com/mermonia/peridot/internal/logger"
 	"github.com/mermonia/peridot/internal/module"
 	"github.com/mermonia/peridot/internal/paths"
 	"github.com/mermonia/peridot/internal/state"
@@ -26,6 +27,8 @@ type DeployCommandConfig struct {
 	Dotreplace bool
 	Root       string
 	ModuleName string
+	Verbose    bool
+	Quiet      bool
 }
 
 var deployCommandDescription string = `
@@ -104,6 +107,27 @@ var DeployCommand cli.Command = cli.Command{
 				},
 			},
 		},
+		{
+			Required: false,
+			Flags: [][]cli.Flag{
+				{
+					&cli.BoolFlag{
+						Name:    "verbose",
+						Aliases: []string{"v"},
+						Value:   false,
+						Usage:   "show verbose debug info",
+					},
+				},
+				{
+					&cli.BoolFlag{
+						Name:    "quiet",
+						Aliases: []string{"q"},
+						Value:   false,
+						Usage:   "supress most logging output",
+					},
+				},
+			},
+		},
 	},
 	Arguments: []cli.Argument{
 		&cli.StringArg{
@@ -120,6 +144,8 @@ var DeployCommand cli.Command = cli.Command{
 			Dotreplace: c.Bool("dotreplace"),
 			Root:       c.String("root"),
 			ModuleName: c.StringArg("moduleName"),
+			Verbose:    c.Bool("verbose"),
+			Quiet:      c.Bool("quiet"),
 		}
 
 		return ExecuteDeploy(cmdCfg, appCtx)
@@ -127,6 +153,13 @@ var DeployCommand cli.Command = cli.Command{
 }
 
 func ExecuteDeploy(cmdCfg *DeployCommandConfig, appCtx *appcontext.Context) error {
+	if err := logger.InitFileLogging(appCtx.DotfilesDir); err != nil {
+		return fmt.Errorf("could not init file logging: %w", err)
+	}
+	defer logger.CloseDefaultLogFile()
+	logger.SetVerboseMode(cmdCfg.Verbose)
+	logger.SetQuietMode(cmdCfg.Quiet)
+
 	dotfilesDir := appCtx.DotfilesDir
 	moduleName := cmdCfg.ModuleName
 
@@ -164,11 +197,11 @@ func ExecuteDeploy(cmdCfg *DeployCommandConfig, appCtx *appcontext.Context) erro
 		}
 	}
 
-	// CRITICAL ERROR
 	if err := state.SaveState(st, dotfilesDir); err != nil {
 		return fmt.Errorf("could not save state: %w", err)
 	}
 
+	logger.Info("Successfully executed command!", "command", "deploy")
 	return nil
 }
 

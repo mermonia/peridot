@@ -18,7 +18,7 @@ func Execute() {
 			"Daniel Sanso <cs.daniel.sanso@gmail.com>",
 		},
 		Copyright:   "(c) 2025 Daniel Sanso",
-		Usage:       "feature-rich dotfiles manager",
+		Usage:       "lightweight dofiles manager",
 		HideHelp:    false,
 		HideVersion: false,
 		Commands: []*cli.Command{

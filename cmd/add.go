@@ -12,6 +12,8 @@ import (
 
 type AddCommandConfig struct {
 	ModuleName string
+	Verbose    bool
+	Quiet      bool
 }
 
 var addCommandDescription string = `
@@ -35,10 +37,35 @@ var AddCommand cli.Command = cli.Command{
 			Value: "",
 		},
 	},
+	MutuallyExclusiveFlags: []cli.MutuallyExclusiveFlags{
+		{
+			Required: false,
+			Flags: [][]cli.Flag{
+				{
+					&cli.BoolFlag{
+						Name:    "verbose",
+						Aliases: []string{"v"},
+						Value:   false,
+						Usage:   "show verbose debug info",
+					},
+				},
+				{
+					&cli.BoolFlag{
+						Name:    "quiet",
+						Aliases: []string{"q"},
+						Value:   false,
+						Usage:   "supress most logging output",
+					},
+				},
+			},
+		},
+	},
 	Action: func(ctx context.Context, c *cli.Command) error {
 		appCtx := appcontext.New()
 		cmdCfg := &AddCommandConfig{
 			ModuleName: c.StringArg("moduleName"),
+			Verbose:    c.Bool("verbose"),
+			Quiet:      c.Bool("quiet"),
 		}
 
 		return ExecuteAdd(cmdCfg, appCtx)
@@ -46,6 +73,13 @@ var AddCommand cli.Command = cli.Command{
 }
 
 func ExecuteAdd(cmdCfg *AddCommandConfig, appCtx *appcontext.Context) error {
+	if err := logger.InitFileLogging(appCtx.DotfilesDir); err != nil {
+		return fmt.Errorf("could not init file logging: %w", err)
+	}
+	defer logger.CloseDefaultLogFile()
+	logger.SetQuietMode(cmdCfg.Quiet)
+	logger.SetVerboseMode(cmdCfg.Verbose)
+
 	if cmdCfg.ModuleName == "" {
 		return fmt.Errorf("cannot create a module with an empty name. did you set the module argument?")
 	}

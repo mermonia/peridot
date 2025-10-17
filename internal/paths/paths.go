@@ -12,6 +12,7 @@ const (
 	PeridotDirName       = ".peridot"
 	StateFileName        = "state.json"
 	ModuleConfigFileName = "module.toml"
+	LogFileName          = "peridot.log"
 	DotreplacePrefix     = "dot-"
 )
 
@@ -115,6 +116,10 @@ func SymlinkPath(path, dotfilesDir, moduleName, root string) (string, error) {
 
 func ModuleDir(dotfilesDir, moduleName string) string {
 	return filepath.Join(dotfilesDir, moduleName)
+}
+
+func LogFilePath(dotfilesDir string) string {
+	return filepath.Join(PeridotDir(dotfilesDir), LogFileName)
 }
 
 func SplitPath(path string) []string {
