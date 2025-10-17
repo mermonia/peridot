@@ -8,13 +8,13 @@ import (
 	"github.com/mermonia/peridot/internal/appcontext"
 	"github.com/mermonia/peridot/internal/logger"
 	"github.com/mermonia/peridot/internal/module"
+	"github.com/mermonia/peridot/internal/paths"
 	"github.com/mermonia/peridot/internal/state"
+	"github.com/mermonia/peridot/internal/templating"
 )
 
 func AddModule(moduleName string, appCtx *appcontext.Context) error {
-	dotfilesDir := appCtx.DotfilesDir
-
-	if err := createModuleIfMissing(moduleName, dotfilesDir); err != nil {
+	if err := createModuleIfMissing(moduleName, appCtx.DotfilesDir); err != nil {
 		return fmt.Errorf("could not add module %s: %w", moduleName, err)
 	}
 
@@ -39,6 +39,70 @@ func AddModule(moduleName string, appCtx *appcontext.Context) error {
 	}
 
 	logger.Info("Successfully added module", "module", moduleName)
+	return nil
+}
+
+func RemoveModule(moduleName string, appCtx *appcontext.Context) error {
+	st, err := state.LoadState(appCtx.DotfilesDir)
+	if err != nil {
+		return fmt.Errorf("could not load state: %w", err)
+	}
+
+	if err := st.Refresh(appCtx.DotfilesDir); err != nil {
+		return fmt.Errorf("could not refresh state: %w", err)
+	}
+
+	moduleState := st.Modules[moduleName]
+	if moduleState == nil {
+		return nil
+	}
+
+	mod, err := module.Load(appCtx.DotfilesDir, moduleName, moduleState)
+	if err != nil {
+		return fmt.Errorf("could not load module: %w", err)
+	}
+
+	for path, entry := range moduleState.Files {
+		if err := removeIfSymlink(entry.SymlinkPath); err != nil {
+			return err
+		}
+
+		if err := templating.CreateRenderedFile(path, entry.SymlinkPath, mod.Config.TemplateVariables); err != nil {
+			return fmt.Errorf("could not create rendered file: %w", err)
+		}
+	}
+
+	if err := os.RemoveAll(paths.ModuleDir(appCtx.DotfilesDir, moduleName)); err != nil {
+		return fmt.Errorf("could not remove module dir: %w", err)
+	}
+
+	if err := st.Refresh(appCtx.DotfilesDir); err != nil {
+		return fmt.Errorf("could not refresh state: %w", err)
+	}
+
+	if err := state.SaveState(st, appCtx.DotfilesDir); err != nil {
+		return fmt.Errorf("could not save state: %w", err)
+	}
+
+	return nil
+}
+
+func removeIfSymlink(path string) error {
+	if path == "" {
+		return nil
+	}
+
+	info, err := os.Lstat(path)
+	if os.IsNotExist(err) {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("could not stat: %w", err)
+	}
+
+	if info.Mode()&os.ModeSymlink != 0 {
+		return os.Remove(path)
+	}
+
 	return nil
 }
 

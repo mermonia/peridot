@@ -25,9 +25,7 @@ func Execute() {
 			&AddCommand,
 			&DeployCommand,
 			&InitCommand,
-			{
-				Name: "remove",
-			},
+			&RemoveCommand,
 			&StatusCommand,
 		},
 	}

@@ -11,8 +11,7 @@ import (
 )
 
 type AddCommandConfig struct {
-	ManageModule bool
-	ModuleName   string
+	ModuleName string
 }
 
 var addCommandDescription string = `
@@ -39,8 +38,7 @@ var AddCommand cli.Command = cli.Command{
 	Action: func(ctx context.Context, c *cli.Command) error {
 		appCtx := appcontext.New()
 		cmdCfg := &AddCommandConfig{
-			ManageModule: c.Bool("manage"),
-			ModuleName:   c.StringArg("moduleName"),
+			ModuleName: c.StringArg("moduleName"),
 		}
 
 		return ExecuteAdd(cmdCfg, appCtx)

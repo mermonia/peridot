@@ -222,7 +222,7 @@ func deployFiles(dotfilesDir string, mod *module.Module, files []string, cmdCfg 
 			return err
 		}
 
-		if err := createRenderedFile(path, renderedFilePath, mod.Config.TemplateVariables); err != nil {
+		if err := templating.CreateRenderedFile(path, renderedFilePath, mod.Config.TemplateVariables); err != nil {
 			return fmt.Errorf("could not render template: %w", err)
 		}
 
@@ -276,24 +276,6 @@ func resolveSymlinkCollision(mod *module.Module, path, symlinkPath string, adopt
 			return fmt.Errorf("found existing symlink not managed by module at: %s", symlinkPath)
 		}
 	}
-	return nil
-}
-
-func createRenderedFile(path, renderedFilePath string, variables map[string]string) error {
-	if err := os.MkdirAll(filepath.Dir(renderedFilePath), 0755); err != nil {
-		return fmt.Errorf("could not create parent dirs: %w", err)
-	}
-
-	out, err := os.Create(renderedFilePath)
-	if err != nil {
-		return fmt.Errorf("could not create rendered file path: %w", err)
-	}
-	defer out.Close()
-
-	if err := templating.ProcessFile(path, variables, out); err != nil {
-		return fmt.Errorf("could not render template: %w", err)
-	}
-
 	return nil
 }
 
