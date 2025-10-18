@@ -20,7 +20,7 @@ Peridot is a lightweight, modular dotfiles manager written in Go. It helps you o
 Make sure you have **Go 1.24.6+** installed.
 
 ```bash
-go install github.com/mermonia/peridot@v0.1.0
+go install github.com/mermonia/peridot@v0.1.1
 ```
 
 The binary will be installed in $GOPATH/bin (usually ~/go/bin).
