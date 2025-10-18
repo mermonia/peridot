@@ -7,6 +7,17 @@ import (
 	"path/filepath"
 )
 
+func CopyToWriter(src string, out io.Writer) error {
+	file, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("could not open source: %w", err)
+	}
+	defer file.Close()
+
+	_, err = io.Copy(out, file)
+	return err
+}
+
 func Copy(src, dst string) error {
 	in, err := os.Open(src)
 	if err != nil {

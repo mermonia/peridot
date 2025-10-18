@@ -6,9 +6,18 @@ import (
 	"os"
 	"path/filepath"
 	"text/template"
+
+	"github.com/mermonia/peridot/internal/files"
+	"github.com/mermonia/peridot/internal/utils"
 )
 
 func RenderFile(path string, variables map[string]string, out io.Writer) error {
+	if isTextFile, err := files.IsTextFile(path); err != nil {
+		return fmt.Errorf("could not check if file is text file: %w", err)
+	} else if !isTextFile {
+		return utils.CopyToWriter(path, out)
+	}
+
 	t, err := template.ParseFiles(path)
 	if err != nil {
 		return fmt.Errorf("could not parse file for templating: %w", err)
