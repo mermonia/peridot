@@ -13,8 +13,9 @@ import (
 )
 
 type StatusCommandConfig struct {
-	Verbose bool
-	Quiet   bool
+	ModuleName string
+	Verbose    bool
+	Quiet      bool
 }
 
 var statusCommandDescription string = `
@@ -55,6 +56,13 @@ var StatusCommand cli.Command = cli.Command{
 	Aliases:     []string{"s"},
 	Usage:       "display the current state of the dotfiles dir",
 	Description: statusCommandDescription,
+	ArgsUsage:   "[module]",
+	Arguments: []cli.Argument{
+		&cli.StringArg{
+			Name:  "moduleName",
+			Value: "",
+		},
+	},
 	MutuallyExclusiveFlags: []cli.MutuallyExclusiveFlags{
 		{
 			Required: false,
@@ -107,17 +115,45 @@ func ExecuteStatus(appCtx *appcontext.Context, cmdCfg *StatusCommandConfig) erro
 		return fmt.Errorf("could not refresh state: %w", err)
 	}
 
-	tr, err := state.GetStateFileTree(st, appCtx.DotfilesDir)
-	if err != nil {
-		return fmt.Errorf("could not get state file tree: %w", err)
+	if cmdCfg.ModuleName == "" {
+		if err := printStateTree(st, appCtx.DotfilesDir); err != nil {
+			return err
+		}
+	} else {
+		if err := printModuleTree(st, appCtx.DotfilesDir, cmdCfg.ModuleName); err != nil {
+			return err
+		}
 	}
-
-	tree.PrintTree(tr, tree.DefaultTreeBranchSymbols, os.Stdout)
 
 	if err := state.SaveState(st, appCtx.DotfilesDir); err != nil {
 		return fmt.Errorf("could not save state: %w", err)
 	}
 
 	logger.Info("Successfully executed command!", "command", "status")
+	return nil
+}
+
+func printStateTree(st *state.State, dotfilesDir string) error {
+	tr, err := state.GetStateFileTree(st, dotfilesDir)
+	if err != nil {
+		return fmt.Errorf("could not get state file tree: %w", err)
+	}
+
+	tree.PrintTree(tr, tree.DefaultTreeBranchSymbols, os.Stdout)
+	return nil
+}
+
+func printModuleTree(st *state.State, dotfilesDir, moduleName string) error {
+	moduleState := st.Modules[moduleName]
+	if moduleState == nil {
+		return fmt.Errorf("cannot print a non-existing module")
+	}
+
+	tr, err := state.GetModuleFileTree(moduleName, moduleState, dotfilesDir)
+	if err != nil {
+		return fmt.Errorf("could not get module file tree: %w", err)
+	}
+
+	tree.PrintTree(tr, tree.DefaultTreeBranchSymbols, os.Stdout)
 	return nil
 }
