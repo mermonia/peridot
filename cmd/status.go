@@ -91,6 +91,7 @@ var StatusCommand cli.Command = cli.Command{
 		appCtx := appcontext.New()
 
 		cmdCfg := &StatusCommandConfig{
+			ModuleName: c.String("moduleName"),
 			Verbose: c.Bool("verbose"),
 			Quiet:   c.Bool("quiet"),
 		}
