@@ -14,9 +14,13 @@ import (
 
 type StatusCommandConfig struct {
 	ModuleName string
+	Depth      int
+	Summary    bool
 	Verbose    bool
 	Quiet      bool
 }
+
+const MAX_DEPTH = 100
 
 var statusCommandDescription string = `
 Displays the current state of the peridot dotfiles directory.
@@ -68,6 +72,27 @@ var StatusCommand cli.Command = cli.Command{
 			Required: false,
 			Flags: [][]cli.Flag{
 				{
+					&cli.BoolFlag {
+						Name: "summary",
+						Aliases: []string{"s"},
+						Value: false,
+						Usage: "only show module status, skip files",
+					},
+				},
+				{
+					&cli.IntFlag {
+						Name: "depth",
+						Aliases: []string{"d"},
+						Value: 0,
+						Usage: "print status tree up until given depth",
+					},
+				},
+			},
+		},
+		{
+			Required: false,
+			Flags: [][]cli.Flag{
+				{
 					&cli.BoolFlag{
 						Name:    "verbose",
 						Aliases: []string{"v"},
@@ -91,9 +116,11 @@ var StatusCommand cli.Command = cli.Command{
 		appCtx := appcontext.New()
 
 		cmdCfg := &StatusCommandConfig{
-			ModuleName: c.String("moduleName"),
+			ModuleName: c.StringArg("moduleName"),
+			Summary: c.Bool("summary"),
 			Verbose: c.Bool("verbose"),
 			Quiet:   c.Bool("quiet"),
+			Depth: c.Int("depth"),
 		}
 		return ExecuteStatus(appCtx, cmdCfg)
 	},
@@ -117,11 +144,25 @@ func ExecuteStatus(appCtx *appcontext.Context, cmdCfg *StatusCommandConfig) erro
 	}
 
 	if cmdCfg.ModuleName == "" {
-		if err := printStateTree(st, appCtx.DotfilesDir); err != nil {
+		depth := MAX_DEPTH
+		if cmdCfg.Depth > 0 {
+			depth = cmdCfg.Depth
+		}
+		if cmdCfg.Summary {
+			depth = 2
+		}
+		if err := printStateTree(st, appCtx.DotfilesDir, depth); err != nil {
 			return err
 		}
 	} else {
-		if err := printModuleTree(st, appCtx.DotfilesDir, cmdCfg.ModuleName); err != nil {
+		depth := MAX_DEPTH
+		if cmdCfg.Depth > 0 {
+			depth = cmdCfg.Depth
+		}
+		if cmdCfg.Summary {
+			depth = 1
+		}
+		if err := printModuleTree(st, appCtx.DotfilesDir, cmdCfg.ModuleName, depth); err != nil {
 			return err
 		}
 	}
@@ -134,17 +175,17 @@ func ExecuteStatus(appCtx *appcontext.Context, cmdCfg *StatusCommandConfig) erro
 	return nil
 }
 
-func printStateTree(st *state.State, dotfilesDir string) error {
+func printStateTree(st *state.State, dotfilesDir string, depth int) error {
 	tr, err := state.GetStateFileTree(st, dotfilesDir)
 	if err != nil {
 		return fmt.Errorf("could not get state file tree: %w", err)
 	}
 
-	tree.PrintTree(tr, tree.DefaultTreeBranchSymbols, os.Stdout)
+	tree.PrintTree(tr, tree.DefaultTreeBranchSymbols, os.Stdout, depth)
 	return nil
 }
 
-func printModuleTree(st *state.State, dotfilesDir, moduleName string) error {
+func printModuleTree(st *state.State, dotfilesDir, moduleName string, depth int) error {
 	moduleState := st.Modules[moduleName]
 	if moduleState == nil {
 		return fmt.Errorf("cannot print a non-existing module")
@@ -155,6 +196,6 @@ func printModuleTree(st *state.State, dotfilesDir, moduleName string) error {
 		return fmt.Errorf("could not get module file tree: %w", err)
 	}
 
-	tree.PrintTree(tr, tree.DefaultTreeBranchSymbols, os.Stdout)
+	tree.PrintTree(tr, tree.DefaultTreeBranchSymbols, os.Stdout, depth)
 	return nil
 }
