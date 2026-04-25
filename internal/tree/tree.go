@@ -25,11 +25,11 @@ var DefaultTreeBranchSymbols TreeBranchSymbols = TreeBranchSymbols{
 	Space:      "    ",
 }
 
-func PrintTree(root *Node, syms TreeBranchSymbols, out io.Writer, maxDepth int) {
+func PrintTree(root *Node, syms TreeBranchSymbols, out io.Writer, maxDepth uint) {
 	printBranch([]string{}, root, syms, out, maxDepth)
 }
 
-func printBranch(prefix []string, root *Node, syms TreeBranchSymbols, out io.Writer, depth int) {
+func printBranch(prefix []string, root *Node, syms TreeBranchSymbols, out io.Writer, depth uint) {
 	// Print the root of the branch
 	depth--
 	fmt.Fprintln(out, strings.Join(prefix, "")+root.Value)
