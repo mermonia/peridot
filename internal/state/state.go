@@ -67,13 +67,13 @@ func SaveState(state *State, dotfilesDir string) error {
 	return nil
 }
 
-func GetStateFileTree(state *State, dotfilesDir string) (*tree.Node, error) {
+func GetStateFileTree(state *State, dotfilesDir string, simple bool) (*tree.Node, error) {
 	newTree := tree.NewTree(".")
 
 	// Systematically add nodes to the tree
 	for name, module := range state.Modules {
 		// Each module is a first-level node
-		moduleNode, err := GetModuleFileTree(name, module, dotfilesDir)
+		moduleNode, err := GetModuleFileTree(name, module, dotfilesDir, simple)
 		if err != nil {
 			return nil, fmt.Errorf("could not get moudule file tree: %w", err)
 		}
@@ -86,7 +86,7 @@ func GetStateFileTree(state *State, dotfilesDir string) (*tree.Node, error) {
 	return newTree, nil
 }
 
-func GetModuleFileTree(name string, module *ModuleState, dotfilesDir string) (*tree.Node, error) {
+func GetModuleFileTree(name string, module *ModuleState, dotfilesDir string, simple bool) (*tree.Node, error) {
 	formattedStatus := getFormattedModuleStatus(name, module)
 	moduleNode := tree.NewTree(formattedStatus)
 
@@ -117,7 +117,7 @@ func GetModuleFileTree(name string, module *ModuleState, dotfilesDir string) (*t
 
 		// Since a map does not allow duplicate keys, we don't have to
 		// check for that.
-		formattedFileStatus := getFormattedFileStatus(fileName, entry)
+		formattedFileStatus := getFormattedFileStatus(fileName, entry, simple)
 		if _, err := lastNode.AddValue(formattedFileStatus); err != nil {
 			return nil, err
 		}
@@ -184,16 +184,20 @@ func getFormattedModuleStatus(name string, module *ModuleState) string {
 	return formattedStatus
 }
 
-func getFormattedFileStatus(name string, entry *Entry) string {
+func getFormattedFileStatus(name string, entry *Entry, simple bool) string {
 	formattedFileStatus := ""
+	formattedSymlink := ""
+	if !simple {
+		formattedSymlink = " <- " + entry.SymlinkPath
+	}
 
 	switch entry.Status {
 	case NotDeployed:
 		formattedFileStatus = name
 	case Unsynced:
-		formattedFileStatus = "✗ " + name + " <- " + entry.SymlinkPath
+		formattedFileStatus = "✗ " + name + formattedSymlink
 	case Synced:
-		formattedFileStatus = "✓ " + name + " <- " + entry.SymlinkPath
+		formattedFileStatus = "✓ " + name + formattedSymlink
 	default:
 		formattedFileStatus = "? " + name
 	}

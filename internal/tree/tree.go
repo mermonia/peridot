@@ -25,20 +25,25 @@ var DefaultTreeBranchSymbols TreeBranchSymbols = TreeBranchSymbols{
 	Space:      "    ",
 }
 
-func PrintTree(root *Node, syms TreeBranchSymbols, out io.Writer) {
-	printBranch([]string{}, root, syms, out)
+func PrintTree(root *Node, syms TreeBranchSymbols, out io.Writer, maxDepth uint) {
+	printBranch([]string{}, root, syms, out, maxDepth)
 }
 
-func printBranch(prefix []string, root *Node, syms TreeBranchSymbols, out io.Writer) {
+func printBranch(prefix []string, root *Node, syms TreeBranchSymbols, out io.Writer, depth uint) {
 	// Print the root of the branch
+	depth--
 	fmt.Fprintln(out, strings.Join(prefix, "")+root.Value)
+
+	if depth <= 0 {
+		return
+	}
 
 	// Print the sub-branches
 	for i := 0; i < len(root.Nodes); i++ {
-		isLastBranchNode := i == len(root.Nodes)-1
+		isLastBranchNode := i == len(root.Nodes)-1 || depth <= 1
 		newPrefix := getNewPrefix(prefix, isLastBranchNode, syms)
 
-		printBranch(newPrefix, root.Nodes[i], syms, out)
+		printBranch(newPrefix, root.Nodes[i], syms, out, depth)
 	}
 }
 

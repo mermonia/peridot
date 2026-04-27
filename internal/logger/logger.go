@@ -11,7 +11,7 @@ import (
 	"github.com/mermonia/peridot/internal/paths"
 )
 
-var defaultHandler = NewCustomHandler(os.Stdout,
+var defaultHandler = NewCustomHandler(os.Stderr,
 	&CustomOptions{Level: slog.LevelDebug, HidePC: true})
 var defaultLogger = slog.New(defaultHandler)
 
