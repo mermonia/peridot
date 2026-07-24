@@ -10,6 +10,7 @@ import (
 const (
 	DotfilesDirEnvName   = "PERIDOT_DOTFILES_DIR"
 	PeridotDirName       = ".peridot"
+	GlobalVarsDirName	 = "variables"
 	StateFileName        = "state.json"
 	ModuleConfigFileName = "module.toml"
 	LogFileName          = "peridot.log"
@@ -85,6 +86,10 @@ func PeridotDir(dotfilesDir string) string {
 
 func StateFilePath(dotfilesDir string) string {
 	return filepath.Join(PeridotDir(dotfilesDir), StateFileName)
+}
+
+func GlobalVarsDir(dotfilesDir string) string {
+	return filepath.Join(PeridotDir(dotfilesDir), GlobalVarsDirName)
 }
 
 func GetDotreplacedPath(path string) string {

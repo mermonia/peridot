@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -168,6 +169,11 @@ func ExecuteDeploy(cmdCfg *DeployCommandConfig, appCtx *appcontext.Context) erro
 		return fmt.Errorf("could not load state: %w", err)
 	}
 
+	vars, err := templating.LoadGlobalVars(dotfilesDir)
+	if err != nil {
+		return fmt.Errorf("could not load global variables: %w", err)
+	}
+
 	if err := st.Refresh(appCtx.DotfilesDir); err != nil {
 		return fmt.Errorf("could not refresh state: %w", err)
 	}
@@ -192,7 +198,7 @@ func ExecuteDeploy(cmdCfg *DeployCommandConfig, appCtx *appcontext.Context) erro
 			return fmt.Errorf("could not simulate deployment of module %s, %w", moduleName, err)
 		}
 	} else {
-		if err := deployFiles(dotfilesDir, mod, filesToDeploy, cmdCfg); err != nil {
+		if err := deployFiles(dotfilesDir, mod, filesToDeploy, vars, cmdCfg); err != nil {
 			return fmt.Errorf("could not deploy module %s: %w", moduleName, err)
 		}
 	}
@@ -226,7 +232,7 @@ func getFilesToDeploy(dotfilesDir string, mod *module.Module) []string {
 	return files
 }
 
-func deployFiles(dotfilesDir string, mod *module.Module, files []string, cmdCfg *DeployCommandConfig) error {
+func deployFiles(dotfilesDir string, mod *module.Module, files []string, globalVars map[string]string, cmdCfg *DeployCommandConfig) error {
 	if err := utils.ExecHook(mod.Config.Hooks.PreDeploy); err != nil {
 		return fmt.Errorf("could not execute the pre-deploy hook: %w", err)
 	}
@@ -255,7 +261,10 @@ func deployFiles(dotfilesDir string, mod *module.Module, files []string, cmdCfg 
 			return err
 		}
 
-		if err := templating.CreateRenderedFile(path, renderedFilePath, mod.Config.TemplateVariables); err != nil {
+		vars := make(map[string]string)
+		maps.Copy(vars, mod.Config.TemplateVariables)
+		maps.Copy(vars, globalVars)
+		if err := templating.CreateRenderedFile(path, renderedFilePath, vars); err != nil {
 			return fmt.Errorf("could not render template: %w", err)
 		}
 
@@ -324,9 +333,6 @@ func createSymlink(symlinkPath, targetPath string) error {
 	return nil
 }
 func simulateDeployment(dotfilesDir string, mod *module.Module, files []string, cmdCfg *DeployCommandConfig) error {
-	fmt.Println("\n=== SIMULATION MODE ===")
-	fmt.Println("No changes will be made to the filesystem")
-
 	if mod.Config.Hooks.PreDeploy != "" {
 		fmt.Printf("Execute pre-deploy hook: %s\n", mod.Config.Hooks.PreDeploy)
 	}
@@ -392,13 +398,12 @@ func simulateDeployment(dotfilesDir string, mod *module.Module, files []string, 
 		return fmt.Errorf("simulation found %d error(s) that would prevent deployment", len(errors))
 	}
 
-	fmt.Println("=== END SIMULATION ===")
 	fmt.Println("Run without --simulate to apply these changes")
 	return nil
 }
 
 func printSimulationSummary(actions, warnings, errors []string, mod *module.Module) {
-	fmt.Println("=== SIMULATION SUMMARY ===")
+	fmt.Println("-- Summary:")
 
 	if len(actions) > 0 {
 		fmt.Printf("Actions that would be performed (%d):\n", len(actions))

@@ -1,6 +1,7 @@
 package module
 
 import (
+	"maps"
 	_ "embed"
 )
 
@@ -39,31 +40,28 @@ func (c *Config) GetPathFields() []PathField {
 	}
 }
 
-func (mCfg *Config) DeepCopy() *Config {
-	if mCfg == nil {
+func (c *Config) DeepCopy() *Config {
+	if c == nil {
 		return nil
 	}
 
 	newMCfg := &Config{
-		Root:               mCfg.Root,
-		Ignore:             append([]string{}, mCfg.Ignore...),
-		Dependencies:       append([]string{}, mCfg.Dependencies...),
-		ModuleDependencies: append([]string{}, mCfg.ModuleDependencies...),
+		Root:               c.Root,
+		Ignore:             append([]string{}, c.Ignore...),
+		Dependencies:       append([]string{}, c.Dependencies...),
+		ModuleDependencies: append([]string{}, c.ModuleDependencies...),
 		Conditions: Conditions{
-			OperatingSystem: mCfg.Conditions.OperatingSystem,
-			EnvRequired:     append([]string{}, mCfg.Conditions.EnvRequired...),
+			OperatingSystem: c.Conditions.OperatingSystem,
+			EnvRequired:     append([]string{}, c.Conditions.EnvRequired...),
 		},
 		Hooks: Hooks{
-			PreDeploy:  mCfg.Hooks.PreDeploy,
-			PostDeploy: mCfg.Hooks.PostDeploy,
-			PostRemove: mCfg.Hooks.PostRemove,
+			PreDeploy:  c.Hooks.PreDeploy,
+			PostDeploy: c.Hooks.PostDeploy,
+			PostRemove: c.Hooks.PostRemove,
 		},
 		TemplateVariables: make(map[string]string),
 	}
 
-	for k, v := range mCfg.TemplateVariables {
-		newMCfg.TemplateVariables[k] = v
-	}
-
+	maps.Copy(newMCfg.TemplateVariables, c.TemplateVariables)
 	return newMCfg
 }

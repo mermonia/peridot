@@ -131,7 +131,7 @@ func ExecuteInit(cmdCfg *InitCommandConfig) error {
 
 func createStateFile(dotfilesDir string) error {
 	if err := os.MkdirAll(filepath.Join(dotfilesDir, paths.PeridotDirName), 0755); err != nil {
-		return fmt.Errorf("could not create state file: %w", err)
+		return fmt.Errorf("could not create peridot dir: %w", err)
 	}
 
 	if err := state.SaveState(&state.State{
