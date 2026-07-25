@@ -144,6 +144,12 @@ func ExecuteStatus(appCtx *appcontext.Context, cmdCfg *StatusCommandConfig) erro
 	logger.SetVerboseMode(cmdCfg.Verbose)
 	logger.SetQuietMode(cmdCfg.Quiet)
 
+	release, err := state.Acquire(appCtx.DotfilesDir)
+	if err != nil {
+		return fmt.Errorf("could not acquire state lock: %w", err)
+	}
+	defer release()
+
 	st, err := state.LoadState(appCtx.DotfilesDir)
 	if err != nil {
 		return fmt.Errorf("could not load state: %w", err)

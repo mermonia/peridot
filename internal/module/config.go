@@ -1,8 +1,8 @@
 package module
 
 import (
-	"maps"
 	_ "embed"
+	"maps"
 )
 
 //go:embed default-module.toml
@@ -13,6 +13,7 @@ type Config struct {
 	Ignore             []string          `toml:"ignore"`
 	Dependencies       []string          `toml:"dependencies"`
 	ModuleDependencies []string          `toml:"module_dependencies"`
+	WatchChanges       bool              `toml:"watch_changes"`
 	Conditions         Conditions        `toml:"conditions"`
 	Hooks              Hooks             `toml:"hooks"`
 	TemplateVariables  map[string]string `toml:"variables"`
@@ -50,6 +51,7 @@ func (c *Config) DeepCopy() *Config {
 		Ignore:             append([]string{}, c.Ignore...),
 		Dependencies:       append([]string{}, c.Dependencies...),
 		ModuleDependencies: append([]string{}, c.ModuleDependencies...),
+		WatchChanges:       c.WatchChanges,
 		Conditions: Conditions{
 			OperatingSystem: c.Conditions.OperatingSystem,
 			EnvRequired:     append([]string{}, c.Conditions.EnvRequired...),

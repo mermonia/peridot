@@ -18,6 +18,12 @@ func AddModule(moduleName string, appCtx *appcontext.Context) error {
 		return fmt.Errorf("could not add module %s: %w", moduleName, err)
 	}
 
+	release, err := state.Acquire(appCtx.DotfilesDir)
+	if err != nil {
+		return fmt.Errorf("could not acquire state lock: %w", err)
+	}
+	defer release()
+
 	st, err := state.LoadState(appCtx.DotfilesDir)
 	if err != nil {
 		return fmt.Errorf("could not load state: %w", err)
@@ -30,7 +36,7 @@ func AddModule(moduleName string, appCtx *appcontext.Context) error {
 	if st.Modules[moduleName] == nil {
 		st.Modules[moduleName] = &state.ModuleState{
 			Status: state.NotDeployed,
-			Files:  make(map[string]*state.Entry),
+			Files:  make(map[string]*state.ModuleFileEntry),
 		}
 	}
 
@@ -43,6 +49,12 @@ func AddModule(moduleName string, appCtx *appcontext.Context) error {
 }
 
 func RemoveModule(moduleName string, appCtx *appcontext.Context) error {
+	release, err := state.Acquire(appCtx.DotfilesDir)
+	if err != nil {
+		return fmt.Errorf("could not acquire state lock: %w", err)
+	}
+	defer release()
+
 	st, err := state.LoadState(appCtx.DotfilesDir)
 	if err != nil {
 		return fmt.Errorf("could not load state: %w", err)

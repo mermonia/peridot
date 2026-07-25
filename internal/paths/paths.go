@@ -10,8 +10,9 @@ import (
 const (
 	DotfilesDirEnvName   = "PERIDOT_DOTFILES_DIR"
 	PeridotDirName       = ".peridot"
-	GlobalVarsDirName	 = "variables"
+	GlobalVarsDirName    = "variables"
 	StateFileName        = "state.json"
+	LockFileName         = "state.lock"
 	ModuleConfigFileName = "module.toml"
 	LogFileName          = "peridot.log"
 	DotreplacePrefix     = "dot-"
@@ -86,6 +87,13 @@ func PeridotDir(dotfilesDir string) string {
 
 func StateFilePath(dotfilesDir string) string {
 	return filepath.Join(PeridotDir(dotfilesDir), StateFileName)
+}
+
+// LockFilePath returns the path of the lock file guarding state.json.
+// It is deliberately a separate file: SaveState replaces state.json via
+// rename, which would invalidate a lock held on it.
+func LockFilePath(dotfilesDir string) string {
+	return filepath.Join(PeridotDir(dotfilesDir), LockFileName)
 }
 
 func GlobalVarsDir(dotfilesDir string) string {

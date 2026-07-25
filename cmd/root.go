@@ -13,7 +13,7 @@ func Execute() {
 	cmd := &cli.Command{
 		Name:                  "peridot",
 		EnableShellCompletion: true,
-		Version:               "v0.1.1",
+		Version:               "v0.1.4",
 		Authors: []any{
 			"Daniel Sanso <cs.daniel.sanso@gmail.com>",
 		},
@@ -27,6 +27,7 @@ func Execute() {
 			&InitCommand,
 			&RemoveCommand,
 			&StatusCommand,
+			&WatchCommand,
 		},
 	}
 

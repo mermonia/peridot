@@ -11,6 +11,10 @@ dependencies = []
 # Other modules that should be deployed first.
 module_dependencies = []
 
+# Redeploy this module automatically when `peridot watch` is
+# running and files in this module change.
+watch_changes = false
+
 
 # Required conditions to start deployment. 
 # Ignored if not set or set to an empty string.

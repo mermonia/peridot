@@ -207,6 +207,6 @@ func (h *CustomHandler) appendAttr(buf []byte, a slog.Attr) []byte {
 
 func (h *CustomHandler) appendSeparator(buf []byte) []byte {
 	separator := " "
-	buf = fmt.Appendf(buf, separator)
+	buf = append(buf, separator...)
 	return buf
 }

@@ -134,8 +134,15 @@ func createStateFile(dotfilesDir string) error {
 		return fmt.Errorf("could not create peridot dir: %w", err)
 	}
 
+	release, err := state.Acquire(dotfilesDir)
+	if err != nil {
+		return fmt.Errorf("could not acquire state lock: %w", err)
+	}
+	defer release()
+
 	if err := state.SaveState(&state.State{
-		Modules: map[string]*state.ModuleState{},
+		Modules:       map[string]*state.ModuleState{},
+		VariableFiles: map[string]*state.VariableFileEntry{},
 	}, dotfilesDir); err != nil {
 		return fmt.Errorf("could not save state: %w", err)
 	}

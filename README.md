@@ -12,6 +12,7 @@ Peridot is a lightweight, modular dotfiles manager written in Go. It helps you o
 - Treat your module's dotfiles as templates without worrying about intermediate "dirty" files.
 - Display the current state of your dotfiles directory with a clear tree view.
 - Simulate the deployment of a module's dotfiles to freely test peridot's behavior before making any changes to the filesystem.
+- Hot reload your dotfiles with a watch daemon that redeploys modules as you edit them.
 
 ---
 
@@ -20,7 +21,7 @@ Peridot is a lightweight, modular dotfiles manager written in Go. It helps you o
 Make sure you have **Go 1.24.6+** installed.
 
 ```bash
-go install github.com/mermonia/peridot@v0.1.1
+go install github.com/mermonia/peridot@v0.1.4
 ```
 
 The binary will be installed in $GOPATH/bin (usually ~/go/bin).
@@ -97,6 +98,49 @@ foo@bar:~/myDotfiles$ peridot status
 │           │       └── ✓ init.lua <- /home/umbraslay/.myconfig/nvim/lua/mermonia/init.lua
 │           └── ✓ init.lua <- /home/umbraslay/.myconfig/nvim/init.lua
 └── ○ hyprland - not deployed
+```
+
+### Hot reload your dotfiles
+
+Because deployed symlinks point at rendered intermediate files rather than at your module's files themselves, editing a module file has no effect until you deploy the module again. The watch daemon does that for you:
+
+```bash
+peridot watch
+```
+- Runs in the foreground, watching your module directories for changes.
+- Redeploys a module shortly after its files change.
+
+A module is watched only if it has already been deployed at least once **and** its module.toml sets `watch_changes = true`:
+
+```toml
+watch_changes = true
+```
+
+Toggling that setting is picked up while the daemon runs, so hot reloading can be turned on or off without restarting it. Changes to the global variable files affect every module's rendered output, so a change there redeploys all watched modules.
+
+Events are debounced (see `--debounce`), so a burst of writes results in a single deployment. Note that this means a module's `pre_deploy` and `post_deploy` hooks run once per batch of changes, not once per changed file. A module that fails to deploy is logged and skipped, and the daemon keeps running.
+
+#### Running under systemd
+
+`peridot watch` is a plain foreground process, so it works as a `Type=simple` user service. Set the dotfiles dir explicitly, since a service manager starts with an arbitrary working directory:
+
+```ini
+# ~/.config/systemd/user/peridot-watch.service
+[Unit]
+Description=peridot dotfiles hot-reload
+
+[Service]
+Type=simple
+Environment=PERIDOT_DOTFILES_DIR=%h/.dotfiles
+ExecStart=%h/go/bin/peridot watch
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+```
+
+```bash
+systemctl --user enable --now peridot-watch.service
 ```
 
 ---

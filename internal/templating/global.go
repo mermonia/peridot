@@ -17,10 +17,31 @@ type GlobalVars struct {
 
 func LoadGlobalVars(dotfilesDir string) (map[string]string, error) {
 	globalVars := make(map[string]string)
+
+	filePaths, err := ListGlobalVarsFiles(dotfilesDir)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, filePath := range filePaths {
+		vars := &GlobalVars{}
+		if _, err := toml.DecodeFile(filePath, vars); err == nil {
+			maps.Copy(globalVars, vars.Variables)
+		}
+	}
+
+	return globalVars, nil
+}
+
+func ListGlobalVarsFiles(dotfilesDir string) ([]string, error) {
 	varsDir := paths.GlobalVarsDir(dotfilesDir)
+	filePaths := []string{}
 
 	entries, err := os.ReadDir(varsDir)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return filePaths, nil
+		}
 		return nil, fmt.Errorf("could not read files from global vars dir: %w", err)
 	}
 
@@ -29,14 +50,10 @@ func LoadGlobalVars(dotfilesDir string) (map[string]string, error) {
 			continue
 		}
 
-		vars := &GlobalVars{}
-		filePath := filepath.Join(varsDir, e.Name())
-		if _, err := toml.DecodeFile(filePath, vars); err == nil {
-			maps.Copy(globalVars, vars.Variables)
-		}
+		filePaths = append(filePaths, filepath.Join(varsDir, e.Name()))
 	}
 
-	return globalVars, nil
+	return filePaths, nil
 }
 
 func isVarsFile(entry fs.DirEntry) bool {

@@ -162,7 +162,12 @@ func ExecuteDeploy(cmdCfg *DeployCommandConfig, appCtx *appcontext.Context) erro
 	logger.SetQuietMode(cmdCfg.Quiet)
 
 	dotfilesDir := appCtx.DotfilesDir
-	moduleName := cmdCfg.ModuleName
+
+	release, err := state.Acquire(dotfilesDir)
+	if err != nil {
+		return fmt.Errorf("could not acquire state lock: %w", err)
+	}
+	defer release()
 
 	st, err := state.LoadState(dotfilesDir)
 	if err != nil {
@@ -174,13 +179,27 @@ func ExecuteDeploy(cmdCfg *DeployCommandConfig, appCtx *appcontext.Context) erro
 		return fmt.Errorf("could not load global variables: %w", err)
 	}
 
-	if err := st.Refresh(appCtx.DotfilesDir); err != nil {
+	if err := st.Refresh(dotfilesDir); err != nil {
 		return fmt.Errorf("could not refresh state: %w", err)
 	}
 
+	if err := deployModule(dotfilesDir, st, cmdCfg.ModuleName, vars, cmdCfg); err != nil {
+		return err
+	}
+
+	if err := state.SaveState(st, dotfilesDir); err != nil {
+		return fmt.Errorf("could not save state: %w", err)
+	}
+
+	logger.Info("Successfully executed command!", "command", "deploy")
+	return nil
+}
+
+func deployModule(dotfilesDir string, st *state.State, moduleName string,
+	globalVars map[string]string, cmdCfg *DeployCommandConfig) error {
 	moduleState := st.Modules[moduleName]
 	if moduleState == nil {
-		return fmt.Errorf("the specified module is not managed by peridot")
+		return fmt.Errorf("the module %s is not managed by peridot", moduleName)
 	}
 
 	mod, err := module.Load(dotfilesDir, moduleName, moduleState)
@@ -189,25 +208,21 @@ func ExecuteDeploy(cmdCfg *DeployCommandConfig, appCtx *appcontext.Context) erro
 	}
 
 	if !mod.ShouldDeploy(st) {
-		return fmt.Errorf("the module %s could not be deployed: %w", moduleName, err)
+		return fmt.Errorf("the module %s does not meet its deployment requirements", moduleName)
 	}
 
 	filesToDeploy := getFilesToDeploy(dotfilesDir, mod)
 	if cmdCfg.Simulate {
 		if err := simulateDeployment(dotfilesDir, mod, filesToDeploy, cmdCfg); err != nil {
-			return fmt.Errorf("could not simulate deployment of module %s, %w", moduleName, err)
+			return fmt.Errorf("could not simulate deployment of module %s: %w", moduleName, err)
 		}
-	} else {
-		if err := deployFiles(dotfilesDir, mod, filesToDeploy, vars, cmdCfg); err != nil {
-			return fmt.Errorf("could not deploy module %s: %w", moduleName, err)
-		}
+		return nil
 	}
 
-	if err := state.SaveState(st, dotfilesDir); err != nil {
-		return fmt.Errorf("could not save state: %w", err)
+	if err := deployFiles(dotfilesDir, mod, filesToDeploy, globalVars, cmdCfg); err != nil {
+		return fmt.Errorf("could not deploy module %s: %w", moduleName, err)
 	}
 
-	logger.Info("Successfully executed command!", "command", "deploy")
 	return nil
 }
 
@@ -281,7 +296,7 @@ func deployFiles(dotfilesDir string, mod *module.Module, files []string, globalV
 			return err
 		}
 
-		mod.State.Files[path] = &state.Entry{
+		mod.State.Files[path] = &state.ModuleFileEntry{
 			Status:           state.Synced,
 			SourceHash:       fileHash,
 			IntermediatePath: renderedFilePath,

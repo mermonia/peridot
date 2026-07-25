@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/mermonia/peridot/internal/hash"
 	"github.com/mermonia/peridot/internal/paths"
+	"github.com/mermonia/peridot/internal/templating"
 	"github.com/mermonia/peridot/internal/tree"
 )
 
@@ -16,20 +18,25 @@ import (
 // Modifications to state should only be made after loading it from
 // a state file, and the state file should be updated right after.
 type State struct {
-	Modules map[string]*ModuleState `json:"modules"`
+	Modules       map[string]*ModuleState       `json:"modules"`
+	VariableFiles map[string]*VariableFileEntry `json:"variableFiles"`
 }
 
 type ModuleState struct {
-	Status     DeployStatus      `json:"status"`
-	DeployedAt time.Time         `json:"deployedAt"`
-	Files      map[string]*Entry `json:"files"`
+	Status     DeployStatus                `json:"status"`
+	DeployedAt time.Time                   `json:"deployedAt"`
+	Files      map[string]*ModuleFileEntry `json:"files"`
 }
 
-type Entry struct {
+type ModuleFileEntry struct {
 	Status           DeployStatus `json:"status"`
 	SourceHash       string       `json:"hash"`
 	IntermediatePath string       `json:"intermediatePath"`
 	SymlinkPath      string       `json:"symlinkPath"`
+}
+
+type VariableFileEntry struct {
+	SourceHash string `json:"hash"`
 }
 
 type DeployStatus int
@@ -51,17 +58,60 @@ func LoadState(dotfilesDir string) (*State, error) {
 		return nil, fmt.Errorf("could not decode json state: %w", err)
 	}
 
+	if state.Modules == nil {
+		state.Modules = map[string]*ModuleState{}
+	}
+
+	if state.VariableFiles == nil {
+		state.VariableFiles = map[string]*VariableFileEntry{}
+	}
+
 	return state, nil
 }
 
+// SaveState writes the state file atomically: the contents go to a
+// temporary file in the same directory, which is then renamed over the
+// real one. A crash mid-write therefore leaves either the old state or
+// the new one, never a truncated file. This matters because state.json
+// doubles as the marker that identifies a dotfiles dir.
 func SaveState(state *State, dotfilesDir string) error {
 	stateFile, err := json.Marshal(state)
 	if err != nil {
 		return fmt.Errorf("could not encode json state: %w", err)
 	}
 
-	if err := os.WriteFile(paths.StateFilePath(dotfilesDir), stateFile, 0644); err != nil {
-		return fmt.Errorf("could not write state file: %w", err)
+	statePath := paths.StateFilePath(dotfilesDir)
+
+	tmp, err := os.CreateTemp(filepath.Dir(statePath), "."+paths.StateFileName+".tmp")
+	if err != nil {
+		return fmt.Errorf("could not create temporary state file: %w", err)
+	}
+	tmpPath := tmp.Name()
+
+	// Best effort cleanup: a successful rename makes this a no-op.
+	defer os.Remove(tmpPath)
+
+	if _, err := tmp.Write(stateFile); err != nil {
+		tmp.Close()
+		return fmt.Errorf("could not write temporary state file: %w", err)
+	}
+
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return fmt.Errorf("could not sync temporary state file: %w", err)
+	}
+
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("could not close temporary state file: %w", err)
+	}
+
+	// CreateTemp uses 0600; match the permissions of a plain write.
+	if err := os.Chmod(tmpPath, 0644); err != nil {
+		return fmt.Errorf("could not set state file permissions: %w", err)
+	}
+
+	if err := os.Rename(tmpPath, statePath); err != nil {
+		return fmt.Errorf("could not replace state file: %w", err)
 	}
 
 	return nil
@@ -127,10 +177,54 @@ func GetModuleFileTree(name string, module *ModuleState, dotfilesDir string, sim
 
 func (s *State) Refresh(dotfilesDir string) error {
 	s.cleanModules(dotfilesDir)
-	return s.updateDeploymentStatus()
+
+	globalVarsChanged, err := s.syncVariableFiles(dotfilesDir)
+	if err != nil {
+		return err
+	}
+
+	return s.updateDeploymentStatus(globalVarsChanged)
 }
 
-func (s *State) updateDeploymentStatus() error {
+func (s *State) syncVariableFiles(dotfilesDir string) (bool, error) {
+	filePaths, err := templating.ListGlobalVarsFiles(dotfilesDir)
+	if err != nil {
+		return false, fmt.Errorf("could not list global variable files: %w", err)
+	}
+
+	globalVarsChanged := false
+
+	for path := range s.VariableFiles {
+		if !slices.Contains(filePaths, path) {
+			delete(s.VariableFiles, path)
+			globalVarsChanged = true
+		}
+	}
+
+	for _, path := range filePaths {
+		updatedHash, err := hash.HashFile(path)
+		if err != nil {
+			return false, fmt.Errorf("could not hash file %s: %w", path, err)
+		}
+
+		file, isTracked := s.VariableFiles[path]
+		if !isTracked {
+			s.VariableFiles[path] = &VariableFileEntry{SourceHash: updatedHash}
+			globalVarsChanged = true
+			continue
+		}
+
+		if updatedHash != file.SourceHash {
+			globalVarsChanged = true
+		}
+
+		file.SourceHash = updatedHash
+	}
+
+	return globalVarsChanged, nil
+}
+
+func (s *State) updateDeploymentStatus(globalVarsChanged bool) error {
 	for _, module := range s.Modules {
 		if module.Status != NotDeployed {
 			for path, file := range module.Files {
@@ -139,7 +233,7 @@ func (s *State) updateDeploymentStatus() error {
 					return fmt.Errorf("could not hash file %s: %w", path, err)
 				}
 
-				if updatedHash != file.SourceHash {
+				if updatedHash != file.SourceHash || globalVarsChanged {
 					file.Status = Unsynced
 					module.Status = Unsynced
 				}
@@ -184,7 +278,7 @@ func getFormattedModuleStatus(name string, module *ModuleState) string {
 	return formattedStatus
 }
 
-func getFormattedFileStatus(name string, entry *Entry, simple bool) string {
+func getFormattedFileStatus(name string, entry *ModuleFileEntry, simple bool) string {
 	formattedFileStatus := ""
 	formattedSymlink := ""
 	if !simple {
