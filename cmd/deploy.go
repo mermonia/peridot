@@ -183,7 +183,7 @@ func ExecuteDeploy(cmdCfg *DeployCommandConfig, appCtx *appcontext.Context) erro
 		return fmt.Errorf("could not refresh state: %w", err)
 	}
 
-	if err := deployModule(dotfilesDir, st, cmdCfg.ModuleName, vars, cmdCfg); err != nil {
+	if _, err := deployModule(dotfilesDir, st, cmdCfg.ModuleName, vars, cmdCfg); err != nil {
 		return err
 	}
 
@@ -196,34 +196,35 @@ func ExecuteDeploy(cmdCfg *DeployCommandConfig, appCtx *appcontext.Context) erro
 }
 
 func deployModule(dotfilesDir string, st *state.State, moduleName string,
-	globalVars map[string]string, cmdCfg *DeployCommandConfig) error {
+	globalVars map[string]string, cmdCfg *DeployCommandConfig) (bool, error) {
 	moduleState := st.Modules[moduleName]
 	if moduleState == nil {
-		return fmt.Errorf("the module %s is not managed by peridot", moduleName)
+		return false, fmt.Errorf("the module %s is not managed by peridot", moduleName)
 	}
 
 	mod, err := module.Load(dotfilesDir, moduleName, moduleState)
 	if err != nil {
-		return fmt.Errorf("could not load module %s: %w", moduleName, err)
+		return false, fmt.Errorf("could not load module %s: %w", moduleName, err)
 	}
 
 	if !mod.ShouldDeploy(st) {
-		return fmt.Errorf("the module %s does not meet its deployment requirements", moduleName)
+		return false, fmt.Errorf("the module %s does not meet its deployment requirements", moduleName)
 	}
 
 	filesToDeploy := getFilesToDeploy(dotfilesDir, mod)
 	if cmdCfg.Simulate {
 		if err := simulateDeployment(dotfilesDir, mod, filesToDeploy, cmdCfg); err != nil {
-			return fmt.Errorf("could not simulate deployment of module %s: %w", moduleName, err)
+			return false, fmt.Errorf("could not simulate deployment of module %s: %w", moduleName, err)
 		}
-		return nil
+		return false, nil
 	}
 
-	if err := deployFiles(dotfilesDir, mod, filesToDeploy, globalVars, cmdCfg); err != nil {
-		return fmt.Errorf("could not deploy module %s: %w", moduleName, err)
+	deployed, err := deployFiles(dotfilesDir, mod, filesToDeploy, globalVars, cmdCfg)
+	if err != nil {
+		return deployed, fmt.Errorf("could not deploy module %s: %w", moduleName, err)
 	}
 
-	return nil
+	return deployed, nil
 }
 
 func getFilesToDeploy(dotfilesDir string, mod *module.Module) []string {
@@ -247,15 +248,13 @@ func getFilesToDeploy(dotfilesDir string, mod *module.Module) []string {
 	return files
 }
 
-func deployFiles(dotfilesDir string, mod *module.Module, files []string, globalVars map[string]string, cmdCfg *DeployCommandConfig) error {
-	if err := utils.ExecHook(mod.Config.Hooks.PreDeploy); err != nil {
-		return fmt.Errorf("could not execute the pre-deploy hook: %w", err)
-	}
-
+func deployFiles(dotfilesDir string, mod *module.Module, files []string, globalVars map[string]string, cmdCfg *DeployCommandConfig) (bool, error) {
 	root := mod.Config.Root
 	if cmdCfg.Root != "" {
 		root = cmdCfg.Root
 	}
+
+	deployed := false
 
 	for _, path := range files {
 		if cmdCfg.Dotreplace {
@@ -264,36 +263,54 @@ func deployFiles(dotfilesDir string, mod *module.Module, files []string, globalV
 
 		renderedFilePath, err := paths.RenderedFilePath(path, dotfilesDir)
 		if err != nil {
-			return fmt.Errorf("could not get potential rendered file path: %w", err)
+			return deployed, fmt.Errorf("could not get potential rendered file path: %w", err)
 		}
 
 		symlinkPath, err := paths.SymlinkPath(path, dotfilesDir, mod.Name, root)
 		if err != nil {
-			return fmt.Errorf("could not get potential symlink path: %w", err)
+			return deployed, fmt.Errorf("could not get potential symlink path: %w", err)
 		}
 
 		if err := resolveSymlinkCollision(mod, path, symlinkPath, cmdCfg.Adopt, cmdCfg.Overwrite); err != nil {
-			return err
+			return deployed, err
 		}
 
 		vars := make(map[string]string)
 		maps.Copy(vars, mod.Config.TemplateVariables)
 		maps.Copy(vars, globalVars)
-		if err := templating.CreateRenderedFile(path, renderedFilePath, vars); err != nil {
-			return fmt.Errorf("could not render template: %w", err)
+
+		content, err := templating.RenderedFileContent(path, vars)
+		if err != nil {
+			return deployed, fmt.Errorf("could not render template: %w", err)
 		}
 
-		if err := os.Remove(symlinkPath); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("failed to remove file: %w", err)
-		}
+		renderedUpToDate := templating.IsRenderedFileUpToDate(renderedFilePath, content)
+		symlinkUpToDate := isSymlinkUpToDate(symlinkPath, renderedFilePath)
 
-		if err := createSymlink(symlinkPath, renderedFilePath); err != nil {
-			return err
+		if !renderedUpToDate || !symlinkUpToDate {
+			if !deployed {
+				if err := utils.ExecHook(mod.Config.Hooks.PreDeploy); err != nil {
+					return deployed, fmt.Errorf("could not execute the pre-deploy hook: %w", err)
+				}
+				deployed = true
+			}
+
+			if !renderedUpToDate {
+				if err := templating.WriteRenderedFile(renderedFilePath, content); err != nil {
+					return deployed, fmt.Errorf("could not write rendered file: %w", err)
+				}
+			}
+
+			if !symlinkUpToDate {
+				if err := createSymlink(symlinkPath, renderedFilePath); err != nil {
+					return deployed, err
+				}
+			}
 		}
 
 		fileHash, err := hash.HashFile(path)
 		if err != nil {
-			return err
+			return deployed, err
 		}
 
 		mod.State.Files[path] = &state.ModuleFileEntry{
@@ -305,13 +322,16 @@ func deployFiles(dotfilesDir string, mod *module.Module, files []string, globalV
 	}
 
 	mod.State.Status = state.Synced
-	mod.State.DeployedAt = time.Now()
 
-	if err := utils.ExecHook(mod.Config.Hooks.PostDeploy); err != nil {
-		return fmt.Errorf("could not execute the post-deploy hook: %w", err)
+	if deployed {
+		mod.State.DeployedAt = time.Now()
+
+		if err := utils.ExecHook(mod.Config.Hooks.PostDeploy); err != nil {
+			return deployed, fmt.Errorf("could not execute the post-deploy hook: %w", err)
+		}
 	}
 
-	return nil
+	return deployed, nil
 }
 
 func resolveSymlinkCollision(mod *module.Module, path, symlinkPath string, adopt, overwrite bool) error {
@@ -336,13 +356,27 @@ func resolveSymlinkCollision(mod *module.Module, path, symlinkPath string, adopt
 	return nil
 }
 
+func isSymlinkUpToDate(symlinkPath, targetPath string) bool {
+	target, err := os.Readlink(symlinkPath)
+	return err == nil && target == targetPath
+}
+
 func createSymlink(symlinkPath, targetPath string) error {
 	if err := os.MkdirAll(filepath.Dir(symlinkPath), 0755); err != nil {
 		return fmt.Errorf("could not create parent dirs: %w", err)
 	}
 
-	if err := os.Symlink(targetPath, symlinkPath); err != nil {
+	tmpPath := filepath.Join(filepath.Dir(symlinkPath), "."+filepath.Base(symlinkPath)+".tmp")
+	if err := os.Remove(tmpPath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("could not remove the temporary symlink: %w", err)
+	}
+
+	if err := os.Symlink(targetPath, tmpPath); err != nil {
 		return fmt.Errorf("could not create symlink: %w", err)
+	}
+
+	if err := os.Rename(tmpPath, symlinkPath); err != nil {
+		return fmt.Errorf("could not replace symlink: %w", err)
 	}
 
 	return nil

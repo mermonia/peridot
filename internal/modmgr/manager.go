@@ -79,7 +79,12 @@ func RemoveModule(moduleName string, appCtx *appcontext.Context) error {
 			return err
 		}
 
-		if err := templating.CreateRenderedFile(path, entry.SymlinkPath, mod.Config.TemplateVariables); err != nil {
+		content, err := templating.RenderedFileContent(path, mod.Config.TemplateVariables)
+		if err != nil {
+			return fmt.Errorf("could not render template: %w", err)
+		}
+
+		if err := templating.WriteRenderedFile(entry.SymlinkPath, content); err != nil {
 			return fmt.Errorf("could not create rendered file: %w", err)
 		}
 	}

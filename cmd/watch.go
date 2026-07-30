@@ -300,8 +300,14 @@ func redeployModules(dotfilesDir string, names []string, deployCfg *DeployComman
 	}
 
 	for _, name := range names {
-		if err := deployModule(dotfilesDir, st, name, vars, deployCfg); err != nil {
+		deployed, err := deployModule(dotfilesDir, st, name, vars, deployCfg)
+		if err != nil {
 			logger.Error(fmt.Sprintf("could not deploy module %s: %s", name, err))
+			continue
+		}
+
+		if !deployed {
+			logger.Debug("Module already up to date, not redeploying", "module", name)
 			continue
 		}
 
